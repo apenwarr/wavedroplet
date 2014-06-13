@@ -7,6 +7,15 @@
   Size: {{'%.2f' % (blob.size/1e6)}} Mbytes<p>
 
   <form action="/save/{{blob.key()}}" method="POST">
+
+  <div style='padding: 1em'>
+    {% for k in avail_fields %}
+    <input type='checkbox' name='key-{{k}}' id='key-{{k}}' value='{{k}}'
+       {{'checked' if show_fields.get(k) else ''}}
+    ><label for='key-{{k}}'>{{k}}</label></input>
+    {% end %}
+  </div>
+
   <table>
     <tr>
       <th>Show?</th>

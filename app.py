@@ -21,8 +21,22 @@ import wifipacket
 
 
 BROADCAST = 'ff:ff:ff:ff:ff:ff'
+DEFAULT_FIELDS = ['seq', 'rate']
+AVAIL_FIELDS = ['seq', 'mcs', 'rate', 'retry',
+                'type', 'typestr', 'dbm_antsignal', 'dbm_antnoise']
 
 loader = tornado.template.Loader('.')
+
+
+def _Esc(s):
+  """Like tornado.escape.url_escape, but only escapes &, #, and %."""
+  out = []
+  for c in s:
+    if c in ['&', '#', '%']:
+      out.append('%%%02X' % ord(c))
+    else:
+      out.append(c)
+  return ''.join(out)
 
 
 def GoogleLoginRequired(func):
@@ -42,6 +56,7 @@ class PcapData(ndb.Model):
   create_time = ndb.DateTimeProperty(auto_now_add=True)
   filename = ndb.StringProperty()
   show_hosts = ndb.StringProperty(repeated=True)
+  show_fields = ndb.StringProperty(repeated=True)
   aliases = ndb.PickleProperty()
 
 
@@ -92,7 +107,8 @@ class ViewHandler(_BaseHandler):
     capdefault = PcapData.get_or_insert(str('*'), show_hosts=[], aliases={})
     pcapdata = PcapData.get_or_insert(str(blob_info.key()),
                                       filename=blob_info.filename,
-                                      show_hosts=[], aliases={})
+                                      show_hosts=[], aliases={},
+                                      show_fields=[])
     try:
       boxes = _Boxes(blob_info)
     except ValueError as e:
@@ -113,6 +129,8 @@ class ViewHandler(_BaseHandler):
       checked = {}
       for b, n in cutboxes:
         checked[b] = (n > cutoff * 10)
+    if not pcapdata.show_fields:
+      pcapdata.show_fields = DEFAULT_FIELDS
     for b in boxes.keys():
       if b not in aliases:
         aliases[b] = capdefault.aliases.get(b, b)
@@ -121,7 +139,9 @@ class ViewHandler(_BaseHandler):
                 boxes=cutboxes,
                 other=other,
                 aliases=aliases,
-                checked=checked)
+                checked=checked,
+                show_fields=dict((i, 1) for i in pcapdata.show_fields),
+                avail_fields=AVAIL_FIELDS)
 
 
 class SaveHandler(_BaseHandler):
@@ -142,10 +162,65 @@ class SaveHandler(_BaseHandler):
         pcapdata.aliases[b] = b
       if self.request.get('show-%s' % b):
         pcapdata.show_hosts.append(b)
+
+    pcapdata.show_fields = []
+    for k in AVAIL_FIELDS:
+      if self.request.get('key-%s' % k):
+        pcapdata.show_fields.append(k)
+
     capdefault.put()
     pcapdata.put()
-    self.response.write('done')
+    url = ('%s?hosts=%s&keys=%s'
+           % (self.request.url.replace('/save/', '/json/'),
+              _Esc(','.join(pcapdata.show_hosts)),
+              _Esc(','.join(pcapdata.show_fields))))
+    self.redirect('//afterquery.appspot.com/?url=%s&chart=traces' % _Esc(url))
 
+
+class JsonHandler(_BaseHandler):
+  @GoogleLoginRequired
+  def get(self, blobres):
+    # TODO(apenwarr): allow http-level caching
+    blob_info = blobstore.BlobInfo.get(str(urllib.unquote(blobres)))
+    pcapdata = PcapData.get_or_insert(str(blob_info.key()),
+                                      show_hosts=[], aliases={})
+    aliases = pcapdata.aliases
+    show_hosts = self.request.get('hosts').split(',')
+    reader = blob_info.open()
+    out = collections.defaultdict(list)
+    keys = self.request.get('keys', 'seq,rate').split(',')
+    timebase = 0
+    for i, (p, frame) in enumerate(wifipacket.Packetize(reader)):
+      if not timebase: timebase = p.pcap_secs
+      ta = p.get('ta')
+      if ta not in show_hosts and aliases.get(ta) not in show_hosts:
+        ta = '~other'  # '~' causes it to sort last in the list
+      elif ta in aliases:
+        ta = aliases[ta]
+      ra = p.get('ra')
+      if ra not in show_hosts and aliases.get(ra) not in show_hosts:
+        ra = '~other'  # '~' causes it to sort last in the list
+      elif ra in aliases:
+        ra = aliases[ra]
+      out[(ta,ra)].append(('%.6f' % (p.pcap_secs - timebase),
+                           tuple(p.get(i) for i in keys)))
+    sessions = list(sorted(out.keys(), key=lambda k: k))
+    headers = ['secs']
+    data = []
+    extra = []
+    for sesskey in sessions:
+      ta, ra = sesskey
+      for k in keys:
+        if ta.startswith('~'): ta = ta[1:]
+        if ra.startswith('~'): ra = ra[1:]
+        headers.append('%s to %s (%s)' % (ta, ra, k))
+      for secs, values in out[sesskey]:
+        data.append([secs] + extra + list(values))
+      extra += [None] * len(keys)
+    j = json.dumps([headers] + data)
+    if self.request.get('jsonp'):
+      j = '%s(%s)' % (self.request.get('jsonp'), j)
+    self.response.write(j)
 
 settings = dict(
     debug = 1,
@@ -156,4 +231,5 @@ wsgi_app = webapp2.WSGIApplication([
     (r'/upload', UploadHandler),
     (r'/view/([^/]+)$', ViewHandler),
     (r'/save/([^/]+)$', SaveHandler),
+    (r'/json/([^/]+)$', JsonHandler),
 ], **settings)
