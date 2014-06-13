@@ -7,5 +7,8 @@
 
   filename: {{blob.filename}}<p>
   size: {{blob.size}}<p>
-  total: {{total}}<p>
+
+  {% for p, frame in packets %}
+    {{p.get('ta')}}<br>
+  {% end %}
 {% end %}

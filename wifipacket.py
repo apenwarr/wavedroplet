@@ -250,6 +250,7 @@ def Packetize(stream):
 
     # pcap packet data
     radiotap = stream.read(incl_len)
+    if len(radiotap) < incl_len: break  # EOF
 
     opt.incl_len = incl_len
     opt.orig_len = orig_len
@@ -308,11 +309,13 @@ def Packetize(stream):
     ofs = 4
     for i, fieldname in enumerate(typefields):
       if fieldname == 'seq':
+        if len(frame) < ofs + 2: break
         seq = struct.unpack('<H', frame[ofs:ofs + 2])[0]
         opt.seq = (seq & 0xfff0) >> 4
         opt.frag = (seq & 0x000f)
         ofs += 2
       else:
+        if len(frame) < ofs + 6: break
         opt[fieldname] = MacAddr(frame[ofs:ofs + 6])
         ofs += 6
 

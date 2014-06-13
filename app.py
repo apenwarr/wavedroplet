@@ -11,8 +11,11 @@ import webapp2
 import tornado.template
 from google.appengine.ext import blobstore
 from google.appengine.ext.webapp import blobstore_handlers
+import wifipacket
+
 
 loader = tornado.template.Loader('.')
+
 
 class _BaseHandler(webapp2.RequestHandler):
   def render(self, template, **kwargs):
@@ -40,12 +43,8 @@ class ViewHandler(_BaseHandler):
     blobres = str(urllib.unquote(blobres))
     blob_info = blobstore.BlobInfo.get(blobres)
     reader = blob_info.open()
-    total = 0
-    while 1:
-      d = reader.read(1024*1024)
-      total += len(d)
-      if not d: break
-    self.render('view.html', blob=blob_info, total=total)
+    packets = wifipacket.Packetize(reader)
+    self.render('view.html', blob=blob_info, packets=packets)
 
 
 settings = dict(
