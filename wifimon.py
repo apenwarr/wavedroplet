@@ -32,8 +32,14 @@ LINKTYPE_IEEE802_11_RADIOTAP = 127
 
 class Flags(object):
   """Flags in the radiotap header."""
-  # TODO(apenwarr): add the other flags here
-  BAD_MCS = 0x40
+  CFP = 0x01
+  SHORT_PREAMBLE = 0x02
+  WEP = 0x04
+  FRAGMENTATION = 0x08
+  FCS = 0x10
+  DATA_PAD = 0x20
+  BAD_FCS = 0x40
+  SHORT_GI = 0x80
 
 
 RADIOTAP_FIELDS = [
@@ -181,14 +187,8 @@ MCS_TABLE = [
 ]
 
 
-def McsToRate(tb):
-  """Given an MCS (known,flags) tuple, return the corresponding bitrate."""
-  #    known=tb[0]
-  #    flags=tb[1]
-  # ********************************************
-  # ************* currently broken code here ***
-  # ************ FIXME FIXME FIXME FIXME *******
-  # ********************************************
+def McsToRate(known, flags, index):
+  """Given MCS information for a packet, return the corresponding bitrate."""
   if known & (1 << 0):
     bw = (20, 40, 20, 20)[flags & 0x3]
   else:
@@ -198,7 +198,7 @@ def McsToRate(tb):
   else:
     gi = 0
   if known & (1 << 1):
-    mcs = tb[2]
+    mcs = index
   else:
     mcs = 0
   if bw == 20:
@@ -235,10 +235,10 @@ def Packetize(stream):
     opt = Struct({})
 
     # pcap packet header
-    bytes = stream.read(16)
-    if len(bytes) < 16: break  # EOF
+    pcaphdr = stream.read(16)
+    if len(pcaphdr) < 16: break  # EOF
     (ts_sec, ts_usec,
-     incl_len, orig_len) = struct.unpack(byteorder + 'IIII', bytes)
+     incl_len, orig_len) = struct.unpack(byteorder + 'IIII', pcaphdr)
     if incl_len > orig_len:
       raise ValueError('packet incl_len(%d) > orig_len(%d): invalid'
                        % (incl_len, orig_len))
@@ -263,11 +263,11 @@ def Packetize(stream):
     optbytes = radiotap[8:it_len]
 
     ofs = 0
-    for i, (name, format) in enumerate(RADIOTAP_FIELDS):
+    for i, (name, structformat) in enumerate(RADIOTAP_FIELDS):
       if it_present & (1 << i):
-        ofs = Align(ofs, struct.calcsize(format[0]))
-        sz = struct.calcsize(format)
-        v = struct.unpack(format, optbytes[ofs:ofs + sz])
+        ofs = Align(ofs, struct.calcsize(structformat[0]))
+        sz = struct.calcsize(structformat)
+        v = struct.unpack(structformat, optbytes[ofs:ofs + sz])
         if name == 'mac_usecs':
           opt.mac_usecs = v[0]
           # opt.mac_secs = v[0] / 1e6
@@ -275,8 +275,11 @@ def Packetize(stream):
           opt.freq = v[0]
           opt.channel_flags = v[1]
         elif name == 'ht':
+          ht_known, ht_flags, ht_index = v
           opt.ht = v
-          opt.mcs = v[2]
+          opt.mcs = ht_index
+          opt.rate = McsToRate(ht_known, ht_flags, ht_index)
+          opt.spatialstreams = MCS_TABLE[ht_index][0]
         else:
           opt[name] = v if len(v) > 1 else v[0]
         ofs += sz
@@ -328,7 +331,7 @@ def Example(p):
         ts = 0
       print (ts, opt)
 #      print HexDump(frame)
-  elif 1:
+  elif 0:
     want_fields = [
         'ta',
         'ra',
@@ -376,7 +379,7 @@ def Example(p):
           continue
       if 'mcs' in opt:
         print(
-            src, opt.dsmode, opt.typestr, ts, McsToRate(opt.mcs), mac_usecs,
+            src, opt.dsmode, opt.typestr, ts, opt.rate, mac_usecs,
             opt.orig_len, seq, opt.flags)
       else:
         print(
