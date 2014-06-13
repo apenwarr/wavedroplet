@@ -1,12 +1,33 @@
 <html>
+<head>
+  <style>
+  * {
+    font-family: monospace;
+  }
+  td {
+    padding-right: 1em;
+    padding-left: 1em;
+  }
+  </style>
+</head>
+
 <body>
 {% block body %}
-  This is text.
+  <div style='float: right; border: 1px solid black; padding: 1em;'>
+  Upload a wifi packet capture!<p>
 
   <form action="{{upload_url}}" method="POST" enctype="multipart/form-data">
     <input name="capfile" type="file" />
-    <input type="submit" />
+    <input type="submit" value="Upload" />
   </form>
+  </div>
+
+  Recent uploads:<ul>
+    {% for r in recents %}
+      <li>{{r.create_time}}
+          <a href="/view/{{r.key.id()}}">{{r.filename}}</a></li>
+    {% end %}
+  </ul>
 {% end %}
 </body>
 </html>

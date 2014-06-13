@@ -3,12 +3,33 @@
 {% block body %}
   <a href='/'>&larr; Index</a><p>
  
-  This is viewer.<p>
+  Filename: {{blob.filename}}<p>
+  Size: {{'%.2f' % (blob.size/1e6)}} Mbytes<p>
 
-  filename: {{blob.filename}}<p>
-  size: {{blob.size}}<p>
-
-  {% for p, frame in packets %}
-    {{p.get('ta')}}<br>
-  {% end %}
+  <form action="/save/{{blob.key()}}" method="POST">
+  <table>
+    <tr>
+      <th>Show?</th>
+      <th>Pkts</th>
+      <th>MAC Addr</th>
+      <th>Alias</th>
+    </tr>
+    {% for b, n in boxes %}
+    <tr>
+      <td><input type='checkbox' name='show-{{b}}'
+             {{'checked' if checked.get(b) else ''}} /></td>
+      <td>{{n}}</td>
+      <td>{{b}}</td>
+      <td><input name='name-{{b}}' value='{{aliases.get(b, "")}}' /></td>
+    </tr>
+    {% end %}
+    <tr>
+      <td><input type='checkbox' name='show-other' /></td>
+      <td>{{other}}</td>
+      <td>(other)</td>
+      <td></td>
+    </tr>
+  </table>
+  <input type='submit' value='Save and View' style='margin: 1em' />
+  </form>
 {% end %}
