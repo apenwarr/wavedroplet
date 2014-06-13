@@ -1,0 +1,12 @@
+<html>
+<body>
+{% block body %}
+  This is text.
+
+  <form action="{{upload_url}}" method="POST" enctype="multipart/form-data">
+    <input name="capfile" type="file" />
+    <input type="submit" />
+  </form>
+{% end %}
+</body>
+</html>
