@@ -193,13 +193,13 @@ class JsonHandler(_BaseHandler):
     for i, (p, frame) in enumerate(wifipacket.Packetize(reader)):
       if not timebase: timebase = p.pcap_secs
       ta = p.get('ta')
+      ra = p.get('ra')
       if ta not in show_hosts and aliases.get(ta) not in show_hosts:
-        ta = '~other'  # '~' causes it to sort last in the list
+        ta = ra = '~other'  # '~' causes it to sort last in the list
       elif ta in aliases:
         ta = aliases[ta]
-      ra = p.get('ra')
       if ra not in show_hosts and aliases.get(ra) not in show_hosts:
-        ra = '~other'  # '~' causes it to sort last in the list
+        ta = ra = '~other'  # '~' causes it to sort last in the list
       elif ra in aliases:
         ra = aliases[ra]
       out[(ta,ra)].append(('%.6f' % (p.pcap_secs - timebase),
@@ -211,9 +211,10 @@ class JsonHandler(_BaseHandler):
     for sesskey in sessions:
       ta, ra = sesskey
       for k in keys:
-        if ta.startswith('~'): ta = ta[1:]
-        if ra.startswith('~'): ra = ra[1:]
-        headers.append('%s to %s (%s)' % (ta, ra, k))
+        if ta == '~other' and ra == '~other':
+          headers.append('other (%s)' % (k,))
+        else:
+          headers.append('%s to %s (%s)' % (ta, ra, k))
       for secs, values in out[sesskey]:
         data.append([secs] + extra + list(values))
       extra += [None] * len(keys)

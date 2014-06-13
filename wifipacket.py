@@ -231,6 +231,8 @@ def Packetize(stream):
   if network != LINKTYPE_IEEE802_11_RADIOTAP:
     raise ValueError('unexpected tcpdump network type %r' % network)
 
+  last_ta = None
+  last_ra = None
   while 1:
     opt = Struct({})
 
@@ -314,10 +316,25 @@ def Packetize(stream):
         opt.seq = (seq & 0xfff0) >> 4
         opt.frag = (seq & 0x000f)
         ofs += 2
-      else:
+      else:  # ta, ra, xa
         if len(frame) < ofs + 6: break
         opt[fieldname] = MacAddr(frame[ofs:ofs + 6])
         ofs += 6
+
+    # ACK and CTS packets omit TA field for efficiency, so we have to fill
+    # it in from the previous packet's RA field.  We can check that the
+    # new packet's RA == the previous packet's TA, just to make sure we're
+    # not lying about it.
+    if not opt.get('ta'):
+      if (last_ta and last_ra
+          and last_ta == opt.get('ra')
+          and last_ra != opt.get('ra')):
+        opt['ta'] = last_ra
+      last_ta = None
+      last_ra = None
+    else:
+      last_ta = opt.get('ta')
+      last_ra = opt.get('ra')
 
     yield opt, frame
 
