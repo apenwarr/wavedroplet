@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import collections
+import errno
 import json
 import os.path
 import random
@@ -39,12 +40,24 @@ def _Esc(s):
   return ''.join(out)
 
 
+def AllowedEmails():
+  try:
+    return open('email-allow.txt').read().split()
+  except IOError as e:
+    if e.errno == errno.ENOENT:
+      pass
+    else:
+      raise
+  return []
+
+
 def GoogleLoginRequired(func):
   def Handler(self, *args, **kwargs):
     user = users.get_current_user()
     if not user:
       self.redirect(users.create_login_url('/'))
-    elif not user.email().endswith('@google.com'):
+    elif (not user.email().endswith('@google.com') and
+          user.email() not in AllowedEmails()):
       self.response.set_status(401, 'Unauthorized')
       self.response.write("Sorry.  You're not an authorized user.")
     else:
