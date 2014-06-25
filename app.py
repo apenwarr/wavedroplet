@@ -121,6 +121,12 @@ class UploadHandler(blobstore_handlers.BlobstoreUploadHandler):
     self.redirect('/view/%s' % blob_info.key())
 
 
+class DownloadHandler(blobstore_handlers.BlobstoreDownloadHandler):
+  def get(self, blobres):
+    blob_info = blobstore.BlobInfo.get(str(urllib.unquote(blobres)))
+    self.send_blob(blob_info)
+
+
 def _Boxes(blob_info):
   boxes = memcache.get(str(blob_info.key()), namespace='boxes')
   if not boxes:
