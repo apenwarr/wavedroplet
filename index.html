@@ -24,7 +24,8 @@
 
   Recent uploads:<ul>
     {% for r in recents %}
-      <li>{{r.create_time}}
+      <li>{{r.create_time.strftime('%Y-%m-%d')}}
+          {{r.create_user_email or ''}}
           <a href="/view/{{r.key.id()}}">{{r.filename}}</a></li>
     {% end %}
   </ul>

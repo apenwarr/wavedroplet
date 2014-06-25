@@ -67,10 +67,27 @@ def GoogleLoginRequired(func):
 
 class PcapData(ndb.Model):
   create_time = ndb.DateTimeProperty(auto_now_add=True)
+  create_user_email = ndb.StringProperty()
   filename = ndb.StringProperty()
   show_hosts = ndb.StringProperty(repeated=True)
   show_fields = ndb.StringProperty(repeated=True)
   aliases = ndb.PickleProperty()
+
+  @staticmethod
+  def _GetDefault():
+    return PcapData.get_or_insert(str('*'), show_hosts=[], aliases={})
+
+  @staticmethod
+  def _GetOrInsertFromBlob(blob_info):
+    u = users.get_current_user()
+    if u:
+      email = u.email()
+    else:
+      email = '<anonymous>'
+    return PcapData.get_or_insert(str(blob_info.key()),
+                                  show_hosts=[], aliases={},
+                                  filename=blob_info.filename,
+                                  create_user_email=email)
 
 
 class _BaseHandler(webapp2.RequestHandler):
@@ -123,11 +140,8 @@ class ViewHandler(_BaseHandler):
   @GoogleLoginRequired
   def get(self, blobres):
     blob_info = blobstore.BlobInfo.get(str(urllib.unquote(blobres)))
-    capdefault = PcapData.get_or_insert(str('*'), show_hosts=[], aliases={})
-    pcapdata = PcapData.get_or_insert(str(blob_info.key()),
-                                      filename=blob_info.filename,
-                                      show_hosts=[], aliases={},
-                                      show_fields=[])
+    capdefault = PcapData._GetDefault()
+    pcapdata = PcapData._GetOrInsertFromBlob(blob_info)
 
     boxes = _Boxes(blob_info)
     cutoff = max(boxes.itervalues()) * 0.01
@@ -154,6 +168,7 @@ class ViewHandler(_BaseHandler):
                 other=other,
                 aliases=aliases,
                 checked=checked,
+                obj=pcapdata,
                 show_fields=dict((i, 1) for i in pcapdata.show_fields),
                 avail_fields=AVAIL_FIELDS)
 
@@ -162,9 +177,14 @@ class SaveHandler(_BaseHandler):
   @GoogleLoginRequired
   def post(self, blobres):
     blob_info = blobstore.BlobInfo.get(str(urllib.unquote(blobres)))
-    capdefault = PcapData.get_or_insert(str('*'), show_hosts=[], aliases={})
-    pcapdata = PcapData.get_or_insert(str(blob_info.key()),
-                                      show_hosts=[], aliases={})
+    capdefault = PcapData._GetDefault()
+    u = users.get_current_user()
+    if u:
+      email = u.email()
+    else:
+      email = 'anonymous'
+    sys.stderr.write('stupid user:%r email:%r\n' % (u, u.email()))
+    pcapdata = PcapData._GetOrInsertFromBlob(blob_info)
     boxes = _Boxes(blob_info)
     pcapdata.show_hosts = []
     for b in boxes.keys():
@@ -196,8 +216,7 @@ class JsonHandler(_BaseHandler):
   def get(self, blobres):
     # TODO(apenwarr): allow http-level caching
     blob_info = blobstore.BlobInfo.get(str(urllib.unquote(blobres)))
-    pcapdata = PcapData.get_or_insert(str(blob_info.key()),
-                                      show_hosts=[], aliases={})
+    pcapdata = PcapData._GetOrInsertFromBlob(blob_info)
     aliases = pcapdata.aliases
     show_hosts = self.request.get('hosts').split(',')
     reader = blob_info.open()

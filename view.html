@@ -3,7 +3,8 @@
 {% block body %}
   <a href='/'>&larr; Index</a><p>
  
-  Filename: {{blob.filename}}<p>
+  Filename: <a href="/download/{{blob.key()}}">{{blob.filename}}</a><br>
+  Uploaded by: {{obj.create_user_email}} at {{obj.create_time}}<br>
   Size: {{'%.2f' % (blob.size/1e6)}} Mbytes<p>
 
   <form action="/save/{{blob.key()}}" method="POST">
