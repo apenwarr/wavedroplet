@@ -5,6 +5,7 @@ from __future__ import print_function
 import bz2
 import csv
 import gzip
+import os
 import struct
 import sys
 
@@ -37,6 +38,7 @@ class Struct(dict):
   def __delattr__(self, name):
     del self[name]
 
+GZIP_MAGIC = '\x1f\x8b\x08'
 TCPDUMP_MAGIC = 0xa1b2c3d4
 TCPDUMP_VERSION = (2, 4)
 LINKTYPE_IEEE802_11_RADIOTAP = 127
@@ -224,8 +226,14 @@ def McsToRate(known, flags, index):
 
 def Packetize(stream):
   """Given a file containing pcap data, yield a series of packets."""
-  # pcap global header
   magicbytes = stream.read(4)
+
+  if magicbytes[:len(GZIP_MAGIC)] == GZIP_MAGIC:
+    stream.seek(-4, os.SEEK_CUR)
+    stream = gzip.GzipFile(mode='rb', fileobj=stream)
+    magicbytes = stream.read(4)
+
+  # pcap global header
   if struct.unpack('<I', magicbytes) == (TCPDUMP_MAGIC,):
     byteorder = '<'
   elif struct.unpack('>I', magicbytes) == (TCPDUMP_MAGIC,):
@@ -422,8 +430,6 @@ def Example(p):
 def ZOpen(fn):
   if fn.endswith('.bz2'):
     return bz2.BZ2File(fn)
-  if fn.endswith('.gz'):
-    return gzip.open(fn)
   return open(fn)
 
 
