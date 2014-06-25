@@ -277,7 +277,7 @@ settings = dict(
 wsgi_app = webapp2.WSGIApplication([
     (r'/', MainHandler),
     (r'/upload', UploadHandler),
-    (r'/download/([^/]+)$', DownloadHandler),
+    (r'/download/([^/]+)/[^/]+$', DownloadHandler),
     (r'/view/([^/]+)$', ViewHandler),
     (r'/save/([^/]+)$', SaveHandler),
     (r'/json/([^/]+)$', JsonHandler),
