@@ -24,7 +24,8 @@ import wifipacket
 BROADCAST = 'ff:ff:ff:ff:ff:ff'
 DEFAULT_FIELDS = ['seq', 'rate']
 AVAIL_FIELDS = ['seq', 'mcs', 'rate', 'retry',
-                'type', 'typestr', 'dbm_antsignal', 'dbm_antnoise']
+                'type', 'typestr', 'dbm_antsignal', 'dbm_antnoise',
+                'bad']
 
 loader = tornado.template.Loader('.')
 

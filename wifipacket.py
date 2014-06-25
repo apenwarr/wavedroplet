@@ -38,6 +38,7 @@ class Struct(dict):
   def __delattr__(self, name):
     del self[name]
 
+
 GZIP_MAGIC = '\x1f\x8b\x08'
 TCPDUMP_MAGIC = 0xa1b2c3d4
 TCPDUMP_VERSION = (2, 4)
@@ -307,7 +308,10 @@ def Packetize(stream):
           opt[name] = v if len(v) > 1 else v[0]
         ofs += sz
 
-    (fctl, duration) = struct.unpack('<HH', frame[0:4])
+    try:
+      (fctl, duration) = struct.unpack('<HH', frame[0:4])
+    except struct.error:
+      (fctl, duration) = 0, 0
     dot11ver = fctl & 0x0003
     dot11type = (fctl & 0x000c) >> 2
     dot11subtype = (fctl & 0x00f0) >> 4
@@ -345,6 +349,10 @@ def Packetize(stream):
     # it in from the previous packet's RA field.  We can check that the
     # new packet's RA == the previous packet's TA, just to make sure we're
     # not lying about it.
+    if opt.get('flags', Flags.BAD_FCS) & Flags.BAD_FCS:
+      opt.bad = 1
+    else:
+      opt.bad = 0
     if not opt.get('ta'):
       if (last_ta and last_ra
           and last_ta == opt.get('ra')
@@ -399,7 +407,7 @@ def Example(p):
       co.writerow(['%.6f' % (t_pcap - tbase_pcap)] +
                   [opt.get(f, None) for f in want_fields])
   else:
-    for opt, frame in Packetize(p):
+    for i, (opt, frame) in enumerate(Packetize(p)):
       ts = opt.pcap_secs
       ts = '%.09f' % ts
       if 'xa' in opt:
@@ -414,17 +422,18 @@ def Example(p):
         seq = opt.seq
       else:
         seq = 'noseq'
+      print(i+1, opt.get('flags'), opt.get('bad'))
       if 'flags' in opt:
         if opt.flags & Flags.BAD_FCS:
           continue
       if 'mcs' in opt:
-        print(
+        print(i + 1,
             src, opt.dsmode, opt.typestr, ts, opt.rate, mac_usecs,
             opt.orig_len, seq, opt.flags)
       else:
-        print(
-            src, opt.dsmode, opt.typestr, ts, opt.rate, mac_usecs,
-            opt.orig_len, seq, opt.flags)
+        print(i + 1,
+            src, opt.dsmode, opt.typestr, ts, opt.get('rate'), mac_usecs,
+            opt.orig_len, seq, opt.get('flags'))
 
 
 def ZOpen(fn):
