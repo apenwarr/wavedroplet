@@ -9,6 +9,18 @@ import struct
 import sys
 
 
+class Error(Exception):
+  pass
+
+
+class FileError(Error):
+  pass
+
+
+class PacketError(Error):
+  pass
+
+
 class Struct(dict):
   """Helper to allow accessing dict members using this.that notation."""
 
@@ -219,7 +231,7 @@ def Packetize(stream):
   elif struct.unpack('>I', magicbytes) == (TCPDUMP_MAGIC,):
     byteorder = '>'
   else:
-    raise ValueError('unexpected tcpdump magic %r' % magicbytes)
+    raise FileError('unexpected tcpdump magic %r' % magicbytes)
   (version_major, version_minor,
    unused_thiszone,
    unused_sigfigs,
@@ -227,9 +239,9 @@ def Packetize(stream):
    network) = struct.unpack(byteorder + 'HHiIII', stream.read(20))
   version = (version_major, version_minor)
   if version != TCPDUMP_VERSION:
-    raise ValueError('unexpected tcpdump version %r' % version)
+    raise FileError('unexpected tcpdump version %r' % version)
   if network != LINKTYPE_IEEE802_11_RADIOTAP:
-    raise ValueError('unexpected tcpdump network type %r' % network)
+    raise FileError('unexpected tcpdump network type %r' % network)
 
   last_ta = None
   last_ra = None
@@ -242,11 +254,11 @@ def Packetize(stream):
     (ts_sec, ts_usec,
      incl_len, orig_len) = struct.unpack(byteorder + 'IIII', pcaphdr)
     if incl_len > orig_len:
-      raise ValueError('packet incl_len(%d) > orig_len(%d): invalid'
-                       % (incl_len, orig_len))
+      raise FileError('packet incl_len(%d) > orig_len(%d): invalid'
+                      % (incl_len, orig_len))
     if incl_len > snaplen:
-      raise ValueError('packet incl_len(%d) > snaplen(%d): invalid'
-                       % (incl_len, snaplen))
+      raise FileError('packet incl_len(%d) > snaplen(%d): invalid'
+                      % (incl_len, snaplen))
 
     opt.pcap_secs = ts_sec + (ts_usec / 1e6)
 
@@ -261,7 +273,7 @@ def Packetize(stream):
     (it_version, unused_it_pad,
      it_len, it_present) = struct.unpack('<BBHI', radiotap[:8])
     if it_version != 0:
-      raise ValueError('unknown radiotap version %d' % it_version)
+      raise PacketError('unknown radiotap version %d' % it_version)
     frame = radiotap[it_len:]
     optbytes = radiotap[8:it_len]
 

@@ -95,6 +95,12 @@ class UploadHandler(blobstore_handlers.BlobstoreUploadHandler):
     upload_files = self.get_uploads()
     sys.stderr.write('upload: %r\n' % upload_files)
     blob_info = upload_files[0]
+    reader = blob_info.open()
+    try:
+      wifipacket.Packetize(reader).next()  # just check basic file header
+    except wifipacket.Error:
+      blob_info.delete()
+      raise
     self.redirect('/view/%s' % blob_info.key())
 
 
@@ -122,13 +128,8 @@ class ViewHandler(_BaseHandler):
                                       filename=blob_info.filename,
                                       show_hosts=[], aliases={},
                                       show_fields=[])
-    try:
-      boxes = _Boxes(blob_info)
-    except ValueError as e:
-      self.response.set_status(500, 'Server error')
-      self.response.write('<pre>%s</pre>' % traceback.format_exc())
-      return
 
+    boxes = _Boxes(blob_info)
     cutoff = max(boxes.itervalues()) * 0.01
     cutboxes = [(b, n)
                 for b, n
@@ -236,6 +237,14 @@ class JsonHandler(_BaseHandler):
       j = '%s(%s)' % (self.request.get('jsonp'), j)
     self.response.write(j)
 
+
+def Handle500(req, resp, exc):
+  resp.clear()
+  resp.headers['Content-type'] = 'text/plain'
+  resp.write(traceback.format_exc(exc))
+  resp.set_status(500)
+
+
 settings = dict(
     debug = 1,
 )
@@ -243,7 +252,10 @@ settings = dict(
 wsgi_app = webapp2.WSGIApplication([
     (r'/', MainHandler),
     (r'/upload', UploadHandler),
+    (r'/download/([^/]+)$', DownloadHandler),
     (r'/view/([^/]+)$', ViewHandler),
     (r'/save/([^/]+)$', SaveHandler),
     (r'/json/([^/]+)$', JsonHandler),
 ], **settings)
+
+wsgi_app.error_handlers[500] = Handle500
