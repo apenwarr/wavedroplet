@@ -23,7 +23,7 @@ import wifipacket
 
 BROADCAST = 'ff:ff:ff:ff:ff:ff'
 DEFAULT_FIELDS = ['seq', 'rate']
-AVAIL_FIELDS = ['seq', 'mcs', 'rate', 'retry',
+AVAIL_FIELDS = ['seq', 'mcs', 'spatialstreams', 'bw', 'rate', 'retry',
                 'type', 'typestr', 'dbm_antsignal', 'dbm_antnoise',
                 'bad']
 

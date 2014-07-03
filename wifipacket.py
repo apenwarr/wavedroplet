@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 """Functions for decoding wifi pcap files."""
 
 from __future__ import print_function
@@ -43,6 +43,7 @@ GZIP_MAGIC = '\x1f\x8b\x08'
 TCPDUMP_MAGIC = 0xa1b2c3d4
 TCPDUMP_VERSION = (2, 4)
 LINKTYPE_IEEE802_11_RADIOTAP = 127
+SHORT_GI_MULT = 10 / 9.
 
 
 class Flags(object):
@@ -165,64 +166,41 @@ def HexDump(s):
   return out
 
 
+# (modulation_name, coding_rate, data_rate(20M, 40M, 80M, 160M))
+# To get the data rate with short guard interval, multiply by SHORT_GI_MULT.
 MCS_TABLE = [
-    (1, 'BPSK', '1/2', (6.50, 7.20, 13.50, 15.00)),
-    (1, 'QPSK', '1/2', (13.00, 14.40, 27.00, 30.00)),
-    (1, 'QPSK', '3/4', (19.50, 21.70, 40.50, 45.00)),
-    (1, '16-QAM', '1/2', (26.00, 28.90, 54.00, 60.00)),
-    (1, '16-QAM', '3/4', (39.00, 43.30, 81.00, 90.00)),
-    (1, '64-QAM', '2/3', (52.00, 57.80, 108.00, 120.00)),
-    (1, '64-QAM', '3/4', (58.50, 65.00, 121.50, 135.00)),
-    (1, '64-QAM', '5/6', (65.00, 72.20, 135.00, 150.00)),
-    (2, 'BPSK', '1/2', (13.00, 14.40, 27.00, 30.00)),
-    (2, 'QPSK', '1/2', (26.00, 28.90, 54.00, 60.00)),
-    (2, 'QPSK', '3/4', (39.00, 43.30, 81.00, 90.00)),
-    (2, '16-QAM', '1/2', (52.00, 57.80, 108.00, 120.00)),
-    (2, '16-QAM', '3/4', (78.00, 86.70, 162.00, 180.00)),
-    (2, '64-QAM', '2/3', (104.00, 115.60, 216.00, 240.00)),
-    (2, '64-QAM', '3/4', (117.00, 130.00, 243.00, 270.00)),
-    (2, '64-QAM', '5/6', (130.00, 144.40, 270.00, 300.00)),
-    (3, 'BPSK', '1/2', (19.50, 21.70, 40.50, 45.00)),
-    (3, 'QPSK', '1/2', (39.00, 43.30, 81.00, 90.00)),
-    (3, 'QPSK', '3/4', (58.50, 65.00, 121.50, 135.00)),
-    (3, '16-QAM', '1/2', (78.00, 86.70, 162.00, 180.00)),
-    (3, '16-QAM', '3/4', (117.00, 130.00, 243.00, 270.00)),
-    (3, '64-QAM', '2/3', (156.00, 173.30, 324.00, 360.00)),
-    (3, '64-QAM', '3/4', (175.50, 195.00, 364.50, 405.00)),
-    (3, '64-QAM', '5/6', (195.00, 216.70, 405.00, 450.00)),
-    (4, 'BPSK', '1/2', (26.00, 28.80, 54.00, 60.00)),
-    (4, 'QPSK', '1/2', (52.00, 57.60, 108.00, 120.00)),
-    (4, 'QPSK', '3/4', (78.00, 86.80, 162.00, 180.00)),
-    (4, '16-QAM', '1/2', (104.00, 115.60, 216.00, 240.00)),
-    (4, '16-QAM', '3/4', (156.00, 173.20, 324.00, 360.00)),
-    (4, '64-QAM', '2/3', (208.00, 231.20, 432.00, 480.00)),
-    (4, '64-QAM', '3/4', (234.00, 260.00, 486.00, 540.00)),
-    (4, '64-QAM', '5/6', (260.00, 288.80, 540.00, 600.00)),
-    (1, 'BPSK', '1/2', (0, 0, 6.50, 7.20)),
+    ('BPSK', '1/2', (6.5, 13.5, 29.3, 58.5)),
+    ('QPSK', '1/2', (13, 27, 58.5, 117)),
+    ('QPSK', '3/4', (19.5, 40.5, 87.8, 175.5)),
+    ('16-QAM', '1/2', (26, 54, 117, 234)),
+    ('16-QAM', '3/4', (39, 81, 175.5, 351)),
+    ('64-QAM', '2/3', (52, 108, 234, 468)),
+    ('64-QAM', '3/4', (58.5, 121.5, 263.3, 526.5)),
+    ('64-QAM', '5/6', (65, 135, 292.5, 585)),
+    # 802.11ac only:
+    ('256-QAM', '3/4', (78, 162, 351, 702)),
+    ('256-QAM', '5/6', (86.7, 180, 390, 780)),
 ]
 
 
 def McsToRate(known, flags, index):
   """Given MCS information for a packet, return the corresponding bitrate."""
-  if known & (1 << 0):
-    bw = (20, 40, 20, 20)[flags & 0x3]
+  if known & 0x01:
+    bw_index = (0, 1, 0, 0)[flags & 0x3]
   else:
-    bw = 20
-  if known & (1 << 2):
-    gi = ((flags & 0x4) >> 2)
+    bw_index = 0  # 20 MHz
+  if known & 0x04:
+    gi = ((flags & 0x04) >> 2)
   else:
     gi = 0
-  if known & (1 << 1):
-    mcs = index
+  gi_mult = (SHORT_GI_MULT if gi else 1)
+  if known & 0x02:
+    mcs = index & 0x07
+    nss = ((index & 0x18) >> 3) + 1
   else:
     mcs = 0
-  if bw == 20:
-    si = 0
-  else:
-    si = 2
-  if gi:
-    si += 1
-  return MCS_TABLE[mcs][3][si]
+    nss = 1
+  return bw_index, MCS_TABLE[mcs][2][bw_index] * nss * gi_mult
 
 
 def Packetize(stream):
@@ -298,12 +276,34 @@ def Packetize(stream):
         elif name == 'channel':
           opt.freq = v[0]
           opt.channel_flags = v[1]
+        elif name == 'rate':
+          opt.rate = v[0] / 2.  # convert multiples of 500 kb/sec -> Mb/sec
         elif name == 'ht':
           ht_known, ht_flags, ht_index = v
           opt.ht = v
-          opt.mcs = ht_index
-          opt.rate = McsToRate(ht_known, ht_flags, ht_index)
-          opt.spatialstreams = MCS_TABLE[ht_index][0]
+          opt.mcs = ht_index & 0x07
+          opt.spatialstreams = 1 + ((ht_index & 0x18) >> 3)
+          width, opt.rate = McsToRate(ht_known, ht_flags, ht_index)
+          opt.bw = 20 << width
+        elif name == 'vht':
+          (vht_known, vht_flags, vht_bw, vht_mcs_nss,
+          vhd_coding, vht_group_id, vht_partial_aid) = v
+          vmn = ord(vht_mcs_nss[0])
+          opt.mcs = (vmn & 0xf0) >> 4
+          opt.spatialstreams = vmn & 0x0f
+          if vht_bw == 0:
+            width = 0
+          elif vht_bw < 4:
+            width = 1
+          elif vht_bw < 11:
+            width = 2
+          else:
+            width = 3
+          opt.bw = 20 << width
+          gi = (vht_flags & 0x04)
+          gi_mult = (SHORT_GI_MULT if gi else 1)
+          opt.rate = (MCS_TABLE[opt.mcs][2][width]
+                      * opt.spatialstreams * gi_mult)
         else:
           opt[name] = v if len(v) > 1 else v[0]
         ofs += sz
@@ -422,18 +422,13 @@ def Example(p):
         seq = opt.seq
       else:
         seq = 'noseq'
-      print(i+1, opt.get('flags'), opt.get('bad'))
       if 'flags' in opt:
         if opt.flags & Flags.BAD_FCS:
           continue
-      if 'mcs' in opt:
-        print(i + 1,
-            src, opt.dsmode, opt.typestr, ts, opt.rate, mac_usecs,
-            opt.orig_len, seq, opt.flags)
-      else:
-        print(i + 1,
-            src, opt.dsmode, opt.typestr, ts, opt.get('rate'), mac_usecs,
-            opt.orig_len, seq, opt.get('flags'))
+      print(i + 1,
+            src, opt.dsmode, opt.typestr, ts,
+            opt.rate, opt.get('mcs'), opt.get('spatialstreams'),
+            mac_usecs, opt.orig_len, seq, opt.get('flags'))
 
 
 def ZOpen(fn):
