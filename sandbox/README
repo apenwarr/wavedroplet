@@ -1,0 +1,6 @@
+1. The page loads only in Firefox: loading a csv file fails because Chrome
+doesn't allow cross origin requests (need to run a webserver).
+
+2. Currently uses mock data, imaginary.data.mid
+
+3. d3js read: http://chimera.labs.oreilly.com/books/1230000000345/index.html
