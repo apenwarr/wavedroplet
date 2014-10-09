@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <title>Magical waves in numbers</title>
+    <title>Pcap secs vs. sequence number [TA/RA]</title>
     <script type="text/javascript" src="d3/d3.v3.js"></script>
     <style type="text/css">
 
@@ -38,63 +38,47 @@
       var padding = 20;
 
       var dataset;
+
       var seqScale;
-      var rateScale;
       var pcapSecsScale;
 
-      d3.csv('imaginary.data', function(error, data) {
+      d3.csv('imaginary.data.prepared', function(error, data) {
         if (error) {
           console.log(error);
         } else {
-          console.log(data);
+          log(data);
           dataset = data;
           init();
           visualize();
         }
       });
 
+      function raw_seq(d) {
+        return Number(d['seq']);
+      }
+
+      function raw_pcapSecs(d) {
+        return parseFloat(d['pcap_secs']);
+      }
+
       function init() {
+        // Prepare scale for X axis
         pcapSecsScale = d3.scale
                  .linear()
-                 .domain([
-                          d3.min(dataset,
-                            function(d) { return parseFloat(d['pcap_secs']); }),
-                          d3.max(dataset,
-                            function(d) { return parseFloat(d['pcap_secs']); })
-                 ])
+                 .domain([ d3.min(dataset, raw_pcapSecs), d3.max(dataset, raw_pcapSecs) ])
                  .range([2 * padding, width - 2 * padding]);
 
         seqScale = d3.scale
                  .linear()
-                 .domain([
-                          d3.min(dataset,
-                            function(d) { return Number(d['seq']); }),
-                          d3.max(dataset,
-                            function(d) { return Number(d['seq']); })
-                 ])
+                 .domain([ d3.min(dataset, raw_seq), d3.max(dataset, raw_seq) ])
                  .range([height - padding, padding]);
 
-        rateScale = d3.scale
-                 .linear()
-                 .domain([
-                          d3.min(dataset,
-                            function(d) { return Number(d['rate']); }),
-                          d3.max(dataset,
-                            function(d) { return Number(d['rate']); })
-                 ])
-                 .range([height - padding, padding]);
       }
 
       function seq(d) {
         var seq = seqScale(Number(d['seq']));
         log('seq = ' + seq);
         return seq;
-      }
-
-      function rate(d) {
-        var rate = rateScale(Number(d['rate']));
-        log('rate = ' + rate);
-        return rate;
       }
 
       function pcapSecs(d) {
@@ -108,18 +92,19 @@
           .select('body')
           .append('svg')
           .attr('width', width)
-          .attr('height', height);
-          // .style("border", "1px solid black")
+          .attr('height', height)
+          .style("border", "1px solid black")
         ;
 
-        // Plot pcapSecs vs. rate
+        // Plot pcapSecs vs. seq for the first pair TA/RA
         svg
-          .selectAll('pcap_vs_rate')
+          .selectAll('pcap_vs_seq_01')
           .data(dataset)
           .enter()
           .append('circle')
+          .filter(function(d) {return d["pair_num"] == "1"})
           .attr('cx', pcapSecs)
-          .attr('cy', rate)
+          .attr('cy', seq)
           .attr('r', 1)
           .append('title')
           .text(
@@ -127,17 +112,18 @@
                return d['typestr']
                  + ': pcapSecs='
                  + d['pcap_secs']
-                 + '; rate='
-                 + d['rate'];
+                 + '; seq='
+                 + d['seq'];
              });
         ;
 
-        // Plot pcapSecs vs. seq
+        // Plot pcapSecs vs. seq for the second pair TA/RA
         svg
-          .selectAll('pcap_vs_seq')
+          .selectAll('pcap_vs_seq_02')
           .data(dataset)
           .enter()
           .append('circle')
+          .filter(function(d) {return d["pair_num"] == "2"})
           .attr('cx', pcapSecs)
           .attr('cy', seq)
           .attr('r', 1)
@@ -152,14 +138,9 @@
                  + d['seq'];
              });
         ;
-
         var pcapSecsAxis = d3.svg.axis()
           .scale(pcapSecsScale)
           .orient('bottom')
-          .ticks(5);
-        var rateAxis = d3.svg.axis()
-          .scale(rateScale)
-          .orient('left')
           .ticks(5);
         var seqAxis = d3.svg.axis()
           .scale(seqScale)
@@ -172,11 +153,6 @@
           .call(pcapSecsAxis);
         svg.append('g')
           .attr('class', 'axis')
-          .attr('transform', 'translate(' + 2 * padding + ',0)')
-          .call(rateAxis);
-        svg.append('g')
-          .attr('class', 'axis')
-          .attr('fill', 'red')
           .attr('transform', 'translate(' + (width - 2 * padding) + ',0)')
           .call(seqAxis);
       }
