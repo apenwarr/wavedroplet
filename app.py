@@ -1,24 +1,32 @@
 #!/usr/bin/env python
+# Copyright 2014 Google Inc. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import collections
 import errno
 import json
-import os.path
-import random
-import re
 import sys
 import traceback
 import urllib
-import wsgiref.handlers
-import wsgiref.simple_server
 import webapp2
 import tornado.template
+import wifipacket
 from google.appengine.api import memcache
 from google.appengine.api import users
 from google.appengine.ext import blobstore
 from google.appengine.ext import ndb
 from google.appengine.ext.webapp import blobstore_handlers
-from google.appengine.ext.webapp import util
-import wifipacket
 
 
 BROADCAST = 'ff:ff:ff:ff:ff:ff'
@@ -242,8 +250,8 @@ class JsonHandler(_BaseHandler):
         ta = ra = '~other'  # '~' causes it to sort last in the list
       elif ra in aliases:
         ra = aliases[ra]
-      out[(ta,ra)].append(('%.6f' % (p.pcap_secs - timebase),
-                           tuple(p.get(i) for i in keys)))
+      out[(ta, ra)].append(('%.6f' % (p.pcap_secs - timebase),
+                            tuple(p.get(i) for i in keys)))
     sessions = list(sorted(out.keys(), key=lambda k: k))
     headers = ['secs']
     data = []
@@ -272,7 +280,7 @@ def Handle500(req, resp, exc):
 
 
 settings = dict(
-    debug = 1,
+    debug=1,
 )
 
 wsgi_app = webapp2.WSGIApplication([
