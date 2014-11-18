@@ -73,28 +73,28 @@ class Flags(object):
 
 
 RADIOTAP_FIELDS = [
-    ('mac_usecs', 'Q'),
-    ('flags', 'B'),
-    ('rate', 'B'),
-    ('channel', 'HH'),
-    ('fhss', 'BB'),
-    ('dbm_antsignal', 'b'),
-    ('dbm_antnoise', 'b'),
-    ('lock_quality', 'H'),
-    ('tx_attenuation', 'H'),
-    ('db_tx_attenuation', 'B'),
-    ('dbm_tx_power', 'b'),
-    ('antenna', 'B'),
-    ('db_antsignal', 'B'),
-    ('db_antnoise', 'B'),
-    ('rx_flags', 'H'),
-    ('tx_flags', 'H'),
-    ('rts_retries', 'B'),
-    ('data_retries', 'B'),
-    ('channelplus', 'II'),
-    ('ht', 'BBB'),
-    ('ampdu_status', 'IHBB'),
-    ('vht', 'HBB4sBBH'),
+    ('mac_usecs', 'Q'),          # microseconds = timestamp received
+    ('flags', 'B'),              # bit field (matches the enum above)
+    ('rate', 'B'),               # Mb/s (=speed of the packet) can slow down
+    ('channel', 'HH'),           # the channel number on which it was received
+    ('fhss', 'BB'),              # ???
+    ('dbm_antsignal', 'b'),      # power level of the received signal
+    ('dbm_antnoise', 'b'),       # power level of the background noise
+    ('lock_quality', 'H'),       # nobody really uses it for anything (NRUIFA)
+    ('tx_attenuation', 'H'),     # NRUIFA
+    ('db_tx_attenuation', 'B'),  # NRUIFA
+    ('dbm_tx_power', 'b'),       # NRUIFA
+    ('antenna', 'B'),            # which antenna
+    ('db_antsignal', 'B'),       # uncalibrated dbm_*
+    ('db_antnoise', 'B'),        # uncalibrated dmb_*
+    ('rx_flags', 'H'),           # ???
+    ('tx_flags', 'H'),           # ???
+    ('rts_retries', 'B'),        # ???
+    ('data_retries', 'B'),       # ???
+    ('channelplus', 'II'),       # ???
+    ('ht', 'BBB'),               # like 'rate' only more (=high transmit rate)
+    ('ampdu_status', 'IHBB'),    # ??? MBU
+    ('vht', 'HBB4sBBH'),         # like 'ht' only more (=higher transmit rate)
 ]
 
 
@@ -246,12 +246,15 @@ def Packetize(stream):
 
   last_ta = None
   last_ra = None
+
   while 1:
     opt = Struct({})
 
     # pcap packet header
     pcaphdr = stream.read(16)
+
     if len(pcaphdr) < 16: break  # EOF
+
     (ts_sec, ts_usec,
      incl_len, orig_len) = struct.unpack(byteorder + 'IIII', pcaphdr)
     if incl_len > orig_len:

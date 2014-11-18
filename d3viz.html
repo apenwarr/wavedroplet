@@ -1,0 +1,161 @@
+{% extends 'index.html' %}
+
+{% block body %}
+
+    <script type='text/javascript'
+      src='//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js'></script>
+    <script type='text/javascript' src='http://d3js.org/d3.v3.min.js'></script>
+    <script type='text/javascript'>
+      // TODO(katepek): Move into a separate JS file
+
+      var debug = true;
+      function log(o) {
+        if (debug) {
+          console.log(o);
+        }
+      }
+
+      // TODO(katepek): Find better values; currently for 13" screen.
+      var width = 1350;
+      var height = 650;
+      var padding = 20;
+
+      // TODO(katepek): Pull in some standard library for this
+      var pair_colours =
+        ['black', 'red', 'blue', 'green', 'magenta',
+         'gray', 'hotpink', 'chocolate', 'deepskyblue', 'gold'];
+
+      var dataset; // all packets
+      var streams; // pairs of (transmitter, receiver)
+
+      var pcapSecsScale; // x
+      var seqScale;      // y
+
+      try {
+        $.getJSON('/json/' + get_key(), function(json) {
+            begin = new Date().getTime();
+
+            init_data(JSON.stringify(json));
+            init_scales();
+            visualize();
+
+            end = new Date().getTime();
+            log('Spent on visualization ' + ((end - begin) / 1000) + ' sec.');
+        });
+      } catch (error) {
+        console.log(error);
+      }
+
+      function get_key() {
+        parts = window.location.pathname.split('/');
+        return parts[parts.length - 1];
+      }
+
+      function init_data(json_string) {
+        // TODO(katepek): Should sanitize here? E.g., discard bad packets?
+        // Packets w/o seq?
+        js_objects = JSON.parse(json_string);
+        dataset = JSON.parse(js_objects['js_packets']);
+        streams = JSON.parse(js_objects['js_streams']);
+      }
+
+      function raw_seq(d) {
+        return Number(d['seq']);
+      }
+
+      function raw_pcapSecs(d) {
+        return parseFloat(d['pcap_secs']);
+      }
+
+      function init_scales() {
+        // Prepare scale for X axis
+        pcapSecsScale = d3.scale
+          .linear()
+          .domain([d3.min(dataset, raw_pcapSecs),
+            d3.max(dataset, raw_pcapSecs)])
+          .range([2 * padding, width - 2 * padding]);
+
+        // Prepare scale for X axis
+        seqScale = d3.scale
+          .linear()
+          .domain([d3.min(dataset, raw_seq),
+            d3.max(dataset, raw_seq)])
+          .range([height - padding, padding]);
+      }
+
+      function seq(d) {
+        var seq = seqScale(Number(d['seq']));
+        return seq;
+      }
+
+      function pcapSecs(d) {
+        var pcapSecs = pcapSecsScale(parseFloat(d['pcap_secs']));
+        return pcapSecs;
+      }
+
+      function visualize() {
+        var svg = d3
+          .select('body')
+          .append('svg')
+          .attr('width', width)
+          .attr('height', height)
+          .style('border', '1px solid black');
+
+        // TODO(katepek): Show a summary somewhere as a legend
+        // which pair corresponds to which colour
+        for (i = 0; i < streams.length; i++) {
+          log('pcap_vs_seq' + i);
+          log(get_colour(i));
+          svg
+            .selectAll('pcap_vs_seq' + i)
+            .data(dataset)
+            .enter()
+            .append('circle')
+            .filter(function(d) {
+              return d['ta'] == streams[i]['ta'] &&
+                     d['ra'] == streams[i]['ra'];
+            })
+            .attr('cx', pcapSecs)
+            .attr('cy', seq)
+            .attr('r', 1)
+            .attr('fill', get_colour(i))
+            .append('title')
+            .text(
+               function(d) {
+                 return d['typestr'] +
+                   ': pcapSecs=' + d['pcap_secs'] +
+                   '; seq=' + d['seq'] +
+                   '\n(ta=' + d['ta'] + ',' + 'ra=' + d['ra'] + ')';
+               }
+            );
+        }
+
+        // TODO(katepek): Axes seem to show range, not the domain
+        var pcapSecsAxis = d3.svg.axis()
+          .scale(pcapSecsScale)
+          .orient('bottom')
+          .ticks(5);
+        var seqAxis = d3.svg.axis()
+          .scale(seqScale)
+          .orient('right')
+          .ticks(5);
+
+        svg.append('g')
+          .attr('class', 'axis')
+          .attr('transform', 'translate(0,' + (height - padding) + ')')
+          .call(pcapSecsAxis);
+        svg.append('g')
+          .attr('class', 'axis')
+          .attr('transform', 'translate(' + (width - 2 * padding) + ',0)')
+          .call(seqAxis);
+      }
+
+      function get_colour(i) {
+        if (i < pair_colours.length)
+          return pair_colours[i];
+        return pair_colours[i % pair_colours.length];
+      }
+
+    </script>
+
+{% end %}
