@@ -1,161 +1,328 @@
-{% extends 'index.html' %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>WiFi packets as seen from the space</title>
+  </head>
+  <body>
 
-{% block body %}
+  <script type='text/javascript'
+        src='//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js'></script>
+      <script type='text/javascript' src='http://d3js.org/d3.v3.min.js'></script>
+      <script type='text/javascript'>
+        // TODO(katepek): Move into a separate JS file
 
-    <script type='text/javascript'
-      src='//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js'></script>
-    <script type='text/javascript' src='http://d3js.org/d3.v3.min.js'></script>
-    <script type='text/javascript'>
-      // TODO(katepek): Move into a separate JS file
-
-      var debug = true;
-      function log(o) {
-        if (debug) {
-          console.log(o);
-        }
-      }
-
-      // TODO(katepek): Find better values; currently for 13" screen.
-      var width = 1350;
-      var height = 650;
-      var padding = 20;
-
-      // TODO(katepek): Pull in some standard library for this
-      var pair_colours =
-        ['black', 'red', 'blue', 'green', 'magenta',
-         'gray', 'hotpink', 'chocolate', 'deepskyblue', 'gold'];
-
-      var dataset; // all packets
-      var streams; // pairs of (transmitter, receiver)
-
-      var pcapSecsScale; // x
-      var seqScale;      // y
-
-      try {
-        $.getJSON('/json/' + get_key(), function(json) {
-            begin = new Date().getTime();
-
-            init_data(JSON.stringify(json));
-            init_scales();
-            visualize();
-
-            end = new Date().getTime();
-            log('Spent on visualization ' + ((end - begin) / 1000) + ' sec.');
-        });
-      } catch (error) {
-        console.log(error);
-      }
-
-      function get_key() {
-        parts = window.location.pathname.split('/');
-        return parts[parts.length - 1];
-      }
-
-      function init_data(json_string) {
-        // TODO(katepek): Should sanitize here? E.g., discard bad packets?
-        // Packets w/o seq?
-        js_objects = JSON.parse(json_string);
-        dataset = JSON.parse(js_objects['js_packets']);
-        streams = JSON.parse(js_objects['js_streams']);
-      }
-
-      function raw_seq(d) {
-        return Number(d['seq']);
-      }
-
-      function raw_pcapSecs(d) {
-        return parseFloat(d['pcap_secs']);
-      }
-
-      function init_scales() {
-        // Prepare scale for X axis
-        pcapSecsScale = d3.scale
-          .linear()
-          .domain([d3.min(dataset, raw_pcapSecs),
-            d3.max(dataset, raw_pcapSecs)])
-          .range([2 * padding, width - 2 * padding]);
-
-        // Prepare scale for X axis
-        seqScale = d3.scale
-          .linear()
-          .domain([d3.min(dataset, raw_seq),
-            d3.max(dataset, raw_seq)])
-          .range([height - padding, padding]);
-      }
-
-      function seq(d) {
-        var seq = seqScale(Number(d['seq']));
-        return seq;
-      }
-
-      function pcapSecs(d) {
-        var pcapSecs = pcapSecsScale(parseFloat(d['pcap_secs']));
-        return pcapSecs;
-      }
-
-      function visualize() {
-        var svg = d3
-          .select('body')
-          .append('svg')
-          .attr('width', width)
-          .attr('height', height)
-          .style('border', '1px solid black');
-
-        // TODO(katepek): Show a summary somewhere as a legend
-        // which pair corresponds to which colour
-        for (i = 0; i < streams.length; i++) {
-          log('pcap_vs_seq' + i);
-          log(get_colour(i));
-          svg
-            .selectAll('pcap_vs_seq' + i)
-            .data(dataset)
-            .enter()
-            .append('circle')
-            .filter(function(d) {
-              return d['ta'] == streams[i]['ta'] &&
-                     d['ra'] == streams[i]['ra'];
-            })
-            .attr('cx', pcapSecs)
-            .attr('cy', seq)
-            .attr('r', 1)
-            .attr('fill', get_colour(i))
-            .append('title')
-            .text(
-               function(d) {
-                 return d['typestr'] +
-                   ': pcapSecs=' + d['pcap_secs'] +
-                   '; seq=' + d['seq'] +
-                   '\n(ta=' + d['ta'] + ',' + 'ra=' + d['ra'] + ')';
-               }
-            );
+        var debug = true;
+        function log(o) {
+          if (debug) {
+            console.log(o);
+          }
         }
 
-        // TODO(katepek): Axes seem to show range, not the domain
-        var pcapSecsAxis = d3.svg.axis()
-          .scale(pcapSecsScale)
-          .orient('bottom')
-          .ticks(5);
-        var seqAxis = d3.svg.axis()
-          .scale(seqScale)
-          .orient('right')
-          .ticks(5);
+        var w = window,
+            d = document,
+            e = d.documentElement,
+            g = d.getElementsByTagName('body')[0];
 
-        svg.append('g')
-          .attr('class', 'axis')
-          .attr('transform', 'translate(0,' + (height - padding) + ')')
-          .call(pcapSecsAxis);
-        svg.append('g')
-          .attr('class', 'axis')
-          .attr('transform', 'translate(' + (width - 2 * padding) + ',0)')
-          .call(seqAxis);
-      }
+        var total_width = w.innerWidth || e.clientWidth || g.clientWidth;
+        var total_height = w.innerHeight || e.clientHeight || g.clientHeight;
+        var width;  // of a plot
+        var height; // of a plot
+        var padding = 20;
 
-      function get_colour(i) {
-        if (i < pair_colours.length)
-          return pair_colours[i];
-        return pair_colours[i % pair_colours.length];
-      }
+        // TODO(katepek): Pull in some standard library for this
+        var stream_colours =
+          ['black', 'red', 'blue', 'green', 'magenta',
+           'gray', 'hotpink', 'chocolate', 'deepskyblue', 'gold'];
 
-    </script>
+        var field_settings = {
+          'pcap_secs': {
+            'parser': parseFloat,
+            'scale_type': d3.scale.linear(),
+          },
+          'seq': {
+            'parser': Number,
+            'scale_type': d3.scale.linear(),
+          },
+          'rate': {
+            'parser': Number,
+            'scale_type': d3.scale.log(),
+          },
+          'default': {
+            'parser': parseFloat,
+            'scale_type': d3.scale.linear(),
+          }
+        }
 
-{% end %}
+        function settings(field) {
+          if (field_settings.hasOwnProperty(field))
+            return field_settings[field];
+          return field_settings['default'];
+        }
+
+        findIdxByPcapSecs = d3.bisector(raw('pcap_secs')).left;
+
+        var to_plot = []; // fields to be plotted against X axis (time)
+        var scales  = {}; // dict[field; scale], incl. X axis
+        var reticle = {}; // dict[field; crosshair]
+
+        var dataset; // all packets
+        var streams; // pairs of (transmitter, receiver)
+
+        try {
+          $.getJSON('/json/' + get_query_param('key')[0], function(json) {
+              begin = new Date().getTime();
+
+              init(JSON.stringify(json));
+              for (idx in to_plot) {
+                visualize(to_plot[idx]);
+              }
+
+              end = new Date().getTime();
+              log('Spent on visualization ' + ((end - begin) / 1000) + ' sec.');
+          });
+        } catch (error) {
+          console.log(error);
+        }
+
+        function get_key() {
+          parts = window.location.pathname.split('/');
+          return parts[parts.length - 1];
+        }
+
+        function get_query_param(param) {
+         params = window.location.search.substring(1).split('&');
+         for (idx in params) {
+           if (params[idx].indexOf(param + '=') == 0)
+             return params[idx].split('=')[1].split(',');
+         }
+         return [];
+        }
+
+        function init(json_string) {
+          // TODO(katepek): Should sanitize here? E.g., discard bad packets?
+          // Packets w/o seq?
+          js_objects = JSON.parse(json_string);
+          dataset = JSON.parse(js_objects['js_packets']);
+          streams = JSON.parse(js_objects['js_streams']);
+
+          to_plot = get_query_param('to_plot');
+
+          // Leave only packets that have all the fields that we want to plot
+          // and the values there are positive
+          filter_dataset();
+          // Descending
+          dataset = dataset.sort(function(x, y) {
+            return raw('pcap_secs')(x) - raw('pcap_secs')(y);
+          });
+
+          height = (total_height - 4 * padding) / to_plot.length;
+          width = total_width - 4 * padding;
+
+          var x_range = [2 * padding, width - 2 * padding];
+          var y_range = [height - padding, padding];
+
+          log('total_height = ' + total_height);
+          log('height = ' + height);
+
+          add_scale('pcap_secs', x_range);
+          for (idx in to_plot) {
+            add_scale(to_plot[idx], y_range);
+          }
+        }
+
+        function filter_dataset() {
+          log('Before filtering: ' + dataset.length);
+          dataset = dataset.filter(function(d) {
+            if (!d.hasOwnProperty('pcap_secs')) return false;
+            if (raw('pcap_secs')(d) <= 0) return false;
+
+            for (idx in to_plot) {
+              if (!d.hasOwnProperty(to_plot[idx])) return false;
+              if (raw(to_plot[idx])(d) <= 0) return false;
+            }
+            return true;
+          });
+          log('After filtering: ' + dataset.length);
+        }
+
+        function add_scale(field, range) {
+          scales[field] = settings(field)['scale_type']
+            .domain([d3.min(dataset, raw(field)),
+              d3.max(dataset, raw(field))])
+            .range(range);
+        }
+
+        function raw(name) {
+          return function(d) {
+            return settings(name)['parser'](d[name]);
+          }
+        }
+
+        function scaled(name) {
+          return function(d) {
+            return scales[name](settings(name)['parser'](d[name]));
+          }
+        }
+
+        function visualize(field) {
+          log('About to visualize ' + field);
+
+          var svg = d3
+            .select('body')
+            .append('svg')
+            .attr('width', width)
+            .attr('height', height)
+            .style('border', '1px solid black');
+
+          var focus = svg.append('g') .style('display', null);
+          reticle[field] = focus;
+
+          // TODO(katepek): Show a summary somewhere as a legend
+          // which pair corresponds to which colour
+          for (i = 0; i < streams.length; i++) {
+            log('pcap_vs_' + field + '_' + i + ' (' + get_colour(i) + ')');
+
+            svg
+              .selectAll('pcap_vs_' + field + '_' + i)
+              .data(dataset)
+              .enter()
+              .append('circle')
+              .filter(function(d) {
+                return d['ta'] == streams[i]['ta'] &&
+                       d['ra'] == streams[i]['ra'];
+              })
+              .attr('cx', scaled('pcap_secs'))
+              .attr('cy', scaled(field))
+              .attr('r', 2)
+              .attr('fill', get_colour(i));
+          }
+
+          // TODO(katepek): Axes seem to show range, not the domain
+          var pcapSecsAxis = d3.svg.axis()
+            .scale(scales['pcap_secs'])
+            .orient('bottom')
+            .ticks(5);
+          var yAxis = d3.svg.axis()
+            .scale(scales[field])
+            .orient('right')
+            .ticks(5);
+
+          svg.append('g')
+            .attr('class', 'axis')
+            .attr('transform', 'translate(0,' + (height - padding) + ')')
+            .call(pcapSecsAxis);
+          svg.append('g')
+            .attr('class', 'axis')
+            .attr('transform', 'translate(' + (width - 2 * padding) + ',0)')
+            .call(yAxis);
+
+          // Add crosshairs
+          focus.append('line')
+            .attr('class', 'x')
+            .style('stroke', 'black')
+            .style('stroke-width', '3')
+            .style('stroke-dasharray', '13,13')
+            .style('opacity', 0.5)
+            .attr('y1', 0)
+            .attr('y2', height);
+
+          focus.append('line')
+            .attr('class', 'y')
+            .style('stroke', 'blue')
+            .style('stroke-width', '3')
+            .style('stroke-dasharray', '13,13')
+            .style('opacity', 0.5)
+            .attr('x1', 0)
+            .attr('x2', width);
+
+          focus.append('circle')
+            .attr('class', 'y')
+            .style('fill', 'none')
+            .style('stroke', 'blue')
+            .style('stroke-width', '3')
+            .attr('r', 4);
+
+          focus.append('text')
+            .attr('class', 'y1')
+            .attr('font-family', 'sans-serif')
+            .attr('font-size', '20px')
+            .attr('fill', 'black')
+            .attr('dx', 8)
+            .attr('dy', '-.5em');
+
+          // append the rectangle to capture mouse movements
+          svg.append('rect')
+              .attr('width', width)
+              .attr('height', height)
+              .style('fill', 'none')
+              .style('pointer-events', 'all')
+              .on('mouseover', function() {
+                for (i in Object.keys(reticle)) {
+                  current = reticle[Object.keys(reticle)[i]];
+                  current.style('display', null);
+                  current.select('.y').style('display', null);
+                  current.select('circle.y').style('display', null);
+                  current.select('text.y1').style('display', null);
+                }
+              })
+              .on('mouseout', function() {
+                x = d3.mouse(this)[0];
+                if (x < scales['pcap_secs'].range()[0] ||
+                    x > scales['pcap_secs'].range()[1]) {
+                  for (i in Object.keys(reticle)) {
+                    reticle[Object.keys(reticle)[i]].style('display', 'none');
+                  }
+                }
+              })
+              .on('mousemove', function() {
+                var x = d3.mouse(this)[0],
+                    y = d3.mouse(this)[1];
+
+                if (x < scales['pcap_secs'].range()[0] ||
+                    x > scales['pcap_secs'].range()[1] ||
+                    y > total_height)
+                  return;
+
+                pcap_secs = scales['pcap_secs'].invert(x);
+                idx = findIdxByPcapSecs(dataset, pcap_secs, 1);
+                d0 = dataset[idx - 1];
+                d1 = dataset[idx];
+                d = Math.abs(x - scaled('pcap_secs')(d0)) >
+                    Math.abs(x - scaled('pcap_secs')(d1)) ?
+                    d1 : d0;
+
+                for (i in Object.keys(reticle)) {
+                  r_field = Object.keys(reticle)[i];
+
+                  closest_x = scaled('pcap_secs')(d);
+                  closest_y = scaled(r_field)(d);
+
+                  reticle[r_field].select('.x')
+                    .attr('transform', 'translate(' + closest_x + ',0)');
+                  reticle[r_field].select('.y')
+                    .attr('transform', 'translate(0,' + closest_y + ')');
+
+                  reticle[r_field].select('circle.y')
+                      .attr('transform',
+                            'translate(' + closest_x + ',' + closest_y + ')');
+                  reticle[r_field].select('text.y1')
+                    .attr('transform',
+                          'translate(' + closest_x + ',' + closest_y + ')')
+                    .text('secs=' + d['pcap_secs'] +
+                      '; ' + r_field + '=' + d[r_field]);
+                }
+              });
+        }
+
+        function get_colour(i) {
+          if (i < stream_colours.length)
+            return stream_colours[i];
+          return stream_colours[i % stream_colours.length];
+        }
+
+      </script>
+
+  </body>
+</html>
+

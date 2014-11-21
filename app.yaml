@@ -5,5 +5,8 @@ api_version: 1
 threadsafe: true
 
 handlers:
+- url: /d3viz.html(.*)
+  static_files: d3viz.html
+  upload: d3viz.html
 - url: /(.*)
   script: app.wsgi_app

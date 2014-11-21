@@ -21,8 +21,8 @@ import sys
 import time
 import traceback
 import urllib
-import tornado.template
 import webapp2
+import tornado.template
 import wifipacket
 from google.appengine.api import memcache
 from google.appengine.api import users
@@ -40,6 +40,17 @@ IS_DEBUG = False
 SAMPLE_SIZE = 2
 
 loader = tornado.template.Loader('.')
+
+
+def _Esc(s):
+  """Like tornado.escape.url_escape, but only escapes &, #, %, and =."""
+  out = []
+  for c in s:
+    if c in ['&', '#', '%', '=']:
+      out.append('%%%02X' % ord(c))
+    else:
+      out.append(c)
+  return ''.join(out)
 
 
 def AllowedEmails():
@@ -236,7 +247,9 @@ class SaveHandler(_BaseHandler):
     capdefault.put()
     pcapdata.put()
 
-    self.render('d3viz.html')
+    self.redirect('/d3viz.html?key=%s&to_plot=%s'
+                  % (_Esc(str(blob_info.key())),
+                     _Esc(','.join(pcapdata.show_fields))))
 
 
 def _MaybeCache(update_cache, blob_info, pcapdata):
