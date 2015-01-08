@@ -2,6 +2,15 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
+    <style>
+
+    .legend {
+      font-size: 14px;
+      font-weight: bold;
+      text-anchor: left;
+    }
+
+    </style>
     <title>WiFi packets as seen from the space</title>
   </head>
   <body>
@@ -11,6 +20,12 @@
       <script type='text/javascript' src='http://d3js.org/d3.v3.min.js'></script>
       <script type='text/javascript'>
         // TODO(katepek): Move into a separate JS file
+
+        // TODO(katepek): Top-level TODOs:
+        // * moving crosshairs is slow. Execution of the code in search and draw methods
+        // take a couple of ms. Timeline of Developer Tools in Chrome shows that groups
+        // of Paint methods take up to half a second (see TimelineRawData-20150107T133507
+        // in sandbox/)
 
         var debug = true;
         function log(o) {
@@ -32,8 +47,8 @@
 
         // TODO(katepek): Pull in some standard library for this
         var stream_colours =
-          ['black', 'red', 'blue', 'green', 'magenta',
-           'gray', 'hotpink', 'chocolate', 'deepskyblue', 'gold'];
+          ['grey', 'red', 'blue', 'green', 'magenta',
+           'black', 'hotpink', 'chocolate', 'deepskyblue', 'gold'];
 
         var field_settings = {
           'pcap_secs': {
@@ -60,23 +75,25 @@
           return field_settings['default'];
         }
 
-        findIdxByPcapSecs = d3.bisector(raw('pcap_secs')).left;
-
         var to_plot = []; // fields to be plotted against X axis (time)
         var scales  = {}; // dict[field; scale], incl. X axis
         var reticle = {}; // dict[field; crosshair]
 
-        var dataset; // all packets
-        var streams; // pairs of (transmitter, receiver)
+        var dataset; // all packets, sorted by pcap_secs
+        var streams; // streams: pairs of (transmitter, receiver)
+        // dataset split by streams as a list of key-value pairs (key ='ta-ra')
+        // sorted descending by the number of packets belonging to each stream
+        var stream2packets;
+
+        // When not null, crosshairs will focus only on packets for this stream.
+        var selected_stream = null; // one of the key-value pairs of stream2packets
 
         try {
           $.getJSON('/json/' + get_query_param('key')[0], function(json) {
               begin = new Date().getTime();
 
               init(JSON.stringify(json));
-              for (idx in to_plot) {
-                visualize(to_plot[idx]);
-              }
+              draw();
 
               end = new Date().getTime();
               log('Spent on visualization ' + ((end - begin) / 1000) + ' sec.');
@@ -99,28 +116,60 @@
          return [];
         }
 
+        function to_stream_key(d) {
+          return d['ta'] + '-' + d['ra'];
+        }
+
+        function from_stream_key(key) {
+          return {'ta': key.split('-')[0], 'ra': key.split('-')[1]};
+        }
+
+        function to_valid_selector_id(key) {
+          return key.replace(/:/g, '').replace('-', '_');
+        }
+
         function init(json_string) {
           // TODO(katepek): Should sanitize here? E.g., discard bad packets?
           // Packets w/o seq?
           js_objects = JSON.parse(json_string);
           dataset = JSON.parse(js_objects['js_packets']);
+
           streams = JSON.parse(js_objects['js_streams']);
 
           to_plot = get_query_param('to_plot');
 
           // Leave only packets that have all the fields that we want to plot
           // and the values there are positive
-          filter_dataset();
-          // Descending
-          dataset = dataset.sort(function(x, y) {
+          sanitize_dataset();
+
+          dataset.sort(function(x, y) {
             return raw('pcap_secs')(x) - raw('pcap_secs')(y);
           });
 
-          height = (total_height - 4 * padding) / to_plot.length;
+          stream2packets = d3.nest()
+            .key(function(d) {return to_stream_key(d);})
+            .sortKeys(function(key1, key2) {
+              stream1 = from_stream_key(key1);
+              stream2 = from_stream_key(key2);
+              stream1_packets = dataset.filter(function(d) {
+                return d['ta'] == stream1['ta'] &&
+                       d['ra'] == stream1['ra'];
+              });
+              stream2_packets = dataset.filter(function(d) {
+                return d['ta'] == stream2['ta'] &&
+                       d['ra'] == stream2['ra'];
+              });
+
+              return stream2_packets.length - stream1_packets.length;
+            })
+            .entries(dataset);
+
+          // TODO(katepek): Recalculate and redraw when resized
+          height = (total_height - 3 * to_plot.length * padding) / to_plot.length;
           width = total_width - 4 * padding;
 
-          var x_range = [2 * padding, width - 2 * padding];
-          var y_range = [height - padding, padding];
+          var x_range = [padding, width - 3 * padding];
+          var y_range = [height - 1.5 * padding, 1.5 * padding];
 
           log('total_height = ' + total_height);
           log('height = ' + height);
@@ -131,11 +180,14 @@
           }
         }
 
-        function filter_dataset() {
+        function sanitize_dataset() {
           log('Before filtering: ' + dataset.length);
           dataset = dataset.filter(function(d) {
             if (!d.hasOwnProperty('pcap_secs')) return false;
             if (raw('pcap_secs')(d) <= 0) return false;
+
+            if (!d.hasOwnProperty('ta') || !d.hasOwnProperty('ra'))
+              return false;
 
             for (idx in to_plot) {
               if (!d.hasOwnProperty(to_plot[idx])) return false;
@@ -165,12 +217,111 @@
           }
         }
 
+        function draw() {
+          add_butter_bar();
+
+          for (idx in to_plot) {
+            visualize(to_plot[idx]);
+          }
+          add_legend();
+        }
+
+        function add_butter_bar() {
+          var svg = d3
+            .select('body')
+            .append('svg')
+            .attr('id', 'butter_bar')
+            .attr('width', width)
+            .attr('height', padding);
+          svg.append('rect')
+            .attr('id', 'butter_bar_box')
+            .attr('width', width)
+            .attr('height', padding)
+            .style('fill', 'none');
+          svg.append('text')
+            .attr('id', 'butter_bar_msg')
+            .attr('class', 'legend')
+            .attr('x', width / 2 - 4 * padding)
+            .attr('y', 2 + padding / 2)
+            .style('fill', 'black')
+            .style('font-size', 14  );
+        }
+
+        function add_legend() {
+          var svg = d3
+            .select('body')
+            .append('svg')
+            .attr('id', 'legend')
+            .attr('width', width)
+            .attr('height', height);
+
+          font_width = 6;
+          key_length = font_width * ((12 + 5) * 2 + 1);
+          total_length = key_length + 4.5 * padding;
+          n_cols = Math.floor(total_width / total_length);
+
+          stream2packets.forEach(function(d, i) {
+            col = i % n_cols;
+            row = Math.floor(i / n_cols);
+            svg.append('text')
+              .attr('id', 'legend_' + to_valid_selector_id(d.key))
+              .attr('x', col * total_length + 2 * padding)
+              .attr('y', (row + 1.5) * padding)
+              .attr('class', 'legend')
+              .style('fill', get_colour(i))
+              .text(d.key)
+              .on('click', function(){
+                set_selected_stream(d);
+            });
+          });
+        }
+
+        function set_selected_stream(stream) {
+          if (selected_stream != null) {
+            d3.select('text#legend_' + to_valid_selector_id(selected_stream.key))
+              .transition().style('font-size', 16);
+          }
+          if (stream && selected_stream &&
+            stream.key == selected_stream.key) {
+            stream = null;
+          }
+          if (stream) {
+            d3.select('text#legend_' + to_valid_selector_id(stream.key))
+              .transition().style('font-size', 22);
+          }
+          selected_stream = stream;
+
+          if (selected_stream) {
+            butter_bar('Locked down to ' + selected_stream.key);
+          } else {
+            butter_bar('Not locked');
+          }
+        }
+
+        function butter_bar(text) {
+          d3.select('text#butter_bar_msg')
+            .style('opacity', 1)
+            .text(text);
+          d3.select('rect#butter_bar_box')
+            .style('opacity', 1)
+            .style('fill', 'red');
+          d3.select('text#butter_bar_msg')
+            .transition()
+            .duration(1500)
+            .style('opacity', 0);
+          d3.select('rect#butter_bar_box')
+            .transition()
+            .duration(500)
+            .style('opacity', 0);
+        }
+
         function visualize(field) {
           log('About to visualize ' + field);
 
           var svg = d3
             .select('body')
             .append('svg')
+            .attr('id', 'plot_' + field)
             .attr('width', width)
             .attr('height', height)
             .style('border', '1px solid black');
@@ -178,25 +329,22 @@
           var focus = svg.append('g') .style('display', null);
           reticle[field] = focus;
 
-          // TODO(katepek): Show a summary somewhere as a legend
-          // which pair corresponds to which colour
-          for (i = 0; i < streams.length; i++) {
-            log('pcap_vs_' + field + '_' + i + ' (' + get_colour(i) + ')');
+          stream2packets.forEach(function(d, i) {
+            current_plot_id = 'pcap_vs_' + field + '_' + to_valid_selector_id(d.key);
+            log(current_plot_id + ' (' + get_colour(i) + ')');
+            log(d.key + "(" + d.values.length + ")");
 
             svg
-              .selectAll('pcap_vs_' + field + '_' + i)
-              .data(dataset)
+              .selectAll(current_plot_id)
+              .data(d.values)
               .enter()
               .append('circle')
-              .filter(function(d) {
-                return d['ta'] == streams[i]['ta'] &&
-                       d['ra'] == streams[i]['ra'];
-              })
               .attr('cx', scaled('pcap_secs'))
               .attr('cy', scaled(field))
               .attr('r', 2)
-              .attr('fill', get_colour(i));
-          }
+              .attr('fill', get_colour(i))
+              .attr('id', current_plot_id);
+          });
 
           // TODO(katepek): Axes seem to show range, not the domain
           var pcapSecsAxis = d3.svg.axis()
@@ -210,11 +358,11 @@
 
           svg.append('g')
             .attr('class', 'axis')
-            .attr('transform', 'translate(0,' + (height - padding) + ')')
+            .attr('transform', 'translate(0,' + (height - 1.5 * padding) + ')')
             .call(pcapSecsAxis);
           svg.append('g')
             .attr('class', 'axis')
-            .attr('transform', 'translate(' + (width - 2 * padding) + ',0)')
+            .attr('transform', 'translate(' + (width - 3 * padding) + ',0)')
             .call(yAxis);
 
           // Add crosshairs
@@ -229,7 +377,7 @@
 
           focus.append('line')
             .attr('class', 'y')
-            .style('stroke', 'blue')
+            .style('stroke', 'black')
             .style('stroke-width', '3')
             .style('stroke-dasharray', '13,13')
             .style('opacity', 0.5)
@@ -239,8 +387,9 @@
           focus.append('circle')
             .attr('class', 'y')
             .style('fill', 'none')
-            .style('stroke', 'blue')
+            .style('stroke', 'black')
             .style('stroke-width', '3')
+            .style('opacity', 0.5)
             .attr('r', 4);
 
           focus.append('text')
@@ -275,43 +424,24 @@
                   }
                 }
               })
-              .on('mousemove', function() {
-                var x = d3.mouse(this)[0],
-                    y = d3.mouse(this)[1];
+              .on('click', function() {
+                set_selected_stream(null);
+                d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], field);
+                if (!d) return;
 
-                if (x < scales['pcap_secs'].range()[0] ||
-                    x > scales['pcap_secs'].range()[1] ||
-                    y > total_height)
-                  return;
-
-                pcap_secs = scales['pcap_secs'].invert(x);
-                idx = findIdxByPcapSecs(dataset, pcap_secs, 1);
-                d0 = dataset[idx - 1];
-                d1 = dataset[idx];
-                d = Math.abs(x - scaled('pcap_secs')(d0)) >
-                    Math.abs(x - scaled('pcap_secs')(d1)) ?
-                    d1 : d0;
-
-                for (i in Object.keys(reticle)) {
-                  r_field = Object.keys(reticle)[i];
-
-                  closest_x = scaled('pcap_secs')(d);
-                  closest_y = scaled(r_field)(d);
-
-                  reticle[r_field].select('.x')
-                    .attr('transform', 'translate(' + closest_x + ',0)');
-                  reticle[r_field].select('.y')
-                    .attr('transform', 'translate(0,' + closest_y + ')');
-
-                  reticle[r_field].select('circle.y')
-                      .attr('transform',
-                            'translate(' + closest_x + ',' + closest_y + ')');
-                  reticle[r_field].select('text.y1')
-                    .attr('transform',
-                          'translate(' + closest_x + ',' + closest_y + ')')
-                    .text('secs=' + d['pcap_secs'] +
-                      '; ' + r_field + '=' + d[r_field]);
+                for (idx in stream2packets) {
+                  if (stream2packets[idx].key == to_stream_key(d)) {
+                    set_selected_stream(stream2packets[idx]);
+                    break;
+                  }
                 }
+
+                draw_crosshairs(d, field);
+              })
+              .on('mousemove', function() {
+                d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], field);
+                if (!d) return;
+                draw_crosshairs(d, field);
               });
         }
 
@@ -319,6 +449,85 @@
           if (i < stream_colours.length)
             return stream_colours[i];
           return stream_colours[i % stream_colours.length];
+        }
+
+        function binary_search_by(field) {
+          return d3.bisector(raw(field)).left;
+        }
+
+        function find_packet(x, y, field) {
+          if (x < scales['pcap_secs'].range()[0] ||
+              x > scales['pcap_secs'].range()[1] ||
+              y > total_height)
+            return;
+
+          pcap_secs = scales['pcap_secs'].invert(x);
+          search_in = dataset;
+
+          if (selected_stream) {
+            search_in = selected_stream.values;
+          }
+
+          idx = binary_search_by('pcap_secs')(search_in, pcap_secs, 0);
+          d = closest_to_y(search_in, idx, x, y, scaled(field), field);
+
+          return d;
+        }
+
+        function closest_to_y(search_in, idx, x, y, scaled_y, field) {
+          idx_range = 50;
+          x_range = 10;
+          scaled_x = scaled('pcap_secs');
+
+          idx = Math.abs(x - scaled_x(search_in[idx - 1])) >
+                Math.abs(x - scaled_x(search_in[idx])) ?
+                idx : idx - 1;
+
+          begin = Math.max(0, idx - idx_range);
+          end = Math.min(search_in.length - 1, idx + idx_range);
+
+          closest_idx = idx;
+
+          min_x = Math.abs(x - scaled_x(search_in[idx]));
+          min_y = Math.abs(y - scaled_y(search_in[idx]));
+
+          for (i = begin; i <= end; i++) {
+            if (Math.abs(x - scaled_x(search_in[i])) > x_range) {
+              continue; // too far away
+            }
+            if (Math.abs(y - scaled_y(search_in[i])) < min_y ||
+              (Math.abs(y - scaled_y(search_in[i])) == min_y &&
+                Math.abs(x - scaled_x(search_in[i])) < min_x)) {
+              min_x = Math.abs(x - scaled_x(search_in[i]));
+              min_y = Math.abs(y - scaled_y(search_in[i]));
+              closest_idx = i;
+            }
+          }
+
+          return search_in[closest_idx];
+        }
+
+        function draw_crosshairs(d, field) {
+          for (i in Object.keys(reticle)) {
+            r_field = Object.keys(reticle)[i];
+
+            closest_x = scaled('pcap_secs')(d);
+            closest_y = scaled(r_field)(d);
+
+            reticle[r_field].select('.x')
+              .attr('transform', 'translate(' + closest_x + ',0)');
+            reticle[r_field].select('.y')
+              .attr('transform', 'translate(0,' + closest_y + ')');
+
+            reticle[r_field].select('circle.y')
+                .attr('transform',
+                      'translate(' + closest_x + ',' + closest_y + ')');
+            reticle[r_field].select('text.y1')
+              .attr('transform',
+                    'translate(' + closest_x + ',' + closest_y + ')')
+              .text('secs=' + d['pcap_secs'] +
+                '; ' + r_field + '=' + d[r_field]);
+          }
         }
 
       </script>
