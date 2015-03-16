@@ -495,35 +495,33 @@
         }
 
         function select_stream(streamId) {
-                // unselect all legends
-                d3.selectAll(".legend").classed("selected", false);
-                // unselect all points
-                d3.selectAll(".points").attr("fill", "grey")
-                console.log(selected_stream, streamId)
+          // unselect all legends
+          d3.selectAll(".legend").classed("selected", false);
+          // unselect all points
+          d3.selectAll(".points").attr("fill", "grey")
 
-                // if new stream selected, update view & selected stream
-                if (!selected_stream || streamId != to_valid_selector_id(selected_stream.key)){
-                  // select current legend
-                  d3.select('#legend_' + streamId).classed("selected", true);
-                  // select these points
-                  for (idx in to_plot){ 
-                    d3.selectAll('#pcap_vs_' + to_plot[idx] + '_' + streamId).attr("fill", "red")
-                  }
-                  // update selected_stream key/value pair
-                  for (idx in stream2packets) {
-                    if (to_valid_selector_id(stream2packets[idx].key) == streamId) {
-                      // set selected_stream so that it's locked to that stream when mousing over
-                      butter_bar('Locked down to ' + stream2packets[idx]);
-                      selected_stream = stream2packets[idx];
-                    break;
-                    }
-                  }
-                } else {
-                  selected_stream = null;
-                  butter_bar('Unlocked')
-                }
+          // if new stream selected, update view & selected stream
+          if (!selected_stream || streamId != to_valid_selector_id(selected_stream.key)){
+            // select current legend
+            d3.select('#legend_' + streamId).classed("selected", true);
+            // select these points
+            for (idx in to_plot){ 
+              d3.selectAll('#pcap_vs_' + to_plot[idx] + '_' + streamId).attr("fill", "red")
+            }
+            // update selected_stream key/value pair
+            for (idx in stream2packets) {
+              if (to_valid_selector_id(stream2packets[idx].key) == streamId) {
+                // set selected_stream so that it's locked to that stream when mousing over
+                butter_bar('Locked down to ' + stream2packets[idx]);
+                selected_stream = stream2packets[idx];
+                break;
+              }
+            }
+          } else {
+            selected_stream = null;
+            butter_bar('Unlocked')
+          }
         }
-
 
       </script>
 
