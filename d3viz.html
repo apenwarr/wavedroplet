@@ -191,7 +191,6 @@
 
             for (idx in to_plot) {
               if (!d.hasOwnProperty(to_plot[idx])) return false;
-              if (raw(to_plot[idx])(d) <= 0) return false;
             }
             return true;
           });
