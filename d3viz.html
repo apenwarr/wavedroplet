@@ -10,6 +10,42 @@
       text-anchor: left;
     }
 
+    .axis path,
+    .axis line {
+      fill: none;
+      stroke: black;
+      stroke-width: 1px;
+      shape-rendering: crispEdges;  
+    }
+
+    .axis text {
+      font-family: sans-serif;
+      font-size: 11px;
+    }
+
+    .focus {
+      stroke: black;
+      opacity: .5;
+    }
+
+    .focus line {
+      stroke-width: 2px;
+      stroke-dasharray: 13,3;
+      opacity: .5;
+    }
+
+    .focus circle {
+      fill: none;
+      stroke: black;
+      stroke-width: 3px;
+    }
+
+    .focus text {
+      font-family: sans-serif;
+      font-size: 20px;
+      fill: black;
+    }
+
     </style>
     <title>WiFi packets as seen from the space</title>
   </head>
@@ -322,10 +358,9 @@
             .append('svg')
             .attr('id', 'plot_' + field)
             .attr('width', width)
-            .attr('height', height)
-            .style('border', '1px solid black');
+            .attr('height', height);
 
-          var focus = svg.append('g') .style('display', null);
+          var focus = svg.append('g').attr("class", "focus").style('display', null);
           reticle[field] = focus;
 
           stream2packets.forEach(function(d, i) {
@@ -367,35 +402,20 @@
           // Add crosshairs
           focus.append('line')
             .attr('class', 'x')
-            .style('stroke', 'black')
-            .style('stroke-width', '3')
-            .style('stroke-dasharray', '13,13')
-            .style('opacity', 0.5)
             .attr('y1', 0)
             .attr('y2', height);
 
           focus.append('line')
             .attr('class', 'y')
-            .style('stroke', 'black')
-            .style('stroke-width', '3')
-            .style('stroke-dasharray', '13,13')
-            .style('opacity', 0.5)
             .attr('x1', 0)
             .attr('x2', width);
 
           focus.append('circle')
             .attr('class', 'y')
-            .style('fill', 'none')
-            .style('stroke', 'black')
-            .style('stroke-width', '3')
-            .style('opacity', 0.5)
             .attr('r', 4);
 
           focus.append('text')
             .attr('class', 'y1')
-            .attr('font-family', 'sans-serif')
-            .attr('font-size', '20px')
-            .attr('fill', 'black')
             .attr('dx', 8)
             .attr('dy', '-.5em');
 
