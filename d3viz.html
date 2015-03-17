@@ -59,8 +59,9 @@
         // take a couple of ms. Timeline of Developer Tools in Chrome shows that groups
         // of Paint methods take up to half a second (see TimelineRawData-20150107T133507
         // in sandbox/)
+        "use strict";
 
-        var debug = true;
+        var debug = false;
         function log(o) {
           if (debug) {
             console.log(o);
@@ -123,12 +124,12 @@
 
         try {
           $.getJSON('/json/' + get_query_param('key')[0], function(json) {
-              begin = new Date().getTime();
+              var begin = new Date().getTime();
 
               init(JSON.stringify(json));
               draw();
 
-              end = new Date().getTime();
+              var end = new Date().getTime();
               log('Spent on visualization ' + ((end - begin) / 1000) + ' sec.');
           });
         } catch (error) {
@@ -141,8 +142,8 @@
         }
 
         function get_query_param(param) {
-         params = window.location.search.substring(1).split('&');
-         for (idx in params) {
+         var params = window.location.search.substring(1).split('&');
+         for (var idx in params) {
            if (params[idx].indexOf(param + '=') == 0)
              return params[idx].split('=')[1].split(',');
          }
@@ -164,7 +165,7 @@
         function init(json_string) {
           // TODO(katepek): Should sanitize here? E.g., discard bad packets?
           // Packets w/o seq?
-          js_objects = JSON.parse(json_string);
+          var js_objects = JSON.parse(json_string);
           dataset = JSON.parse(js_objects['js_packets']);
 
           streams = JSON.parse(js_objects['js_streams']);
@@ -182,13 +183,13 @@
           stream2packets = d3.nest()
             .key(function(d) {return to_stream_key(d);})
             .sortKeys(function(key1, key2) {
-              stream1 = from_stream_key(key1);
-              stream2 = from_stream_key(key2);
-              stream1_packets = dataset.filter(function(d) {
+              var stream1 = from_stream_key(key1);
+              var stream2 = from_stream_key(key2);
+              var stream1_packets = dataset.filter(function(d) {
                 return d['ta'] == stream1['ta'] &&
                        d['ra'] == stream1['ra'];
               });
-              stream2_packets = dataset.filter(function(d) {
+              var stream2_packets = dataset.filter(function(d) {
                 return d['ta'] == stream2['ta'] &&
                        d['ra'] == stream2['ra'];
               });
@@ -208,7 +209,7 @@
           log('height = ' + height);
 
           add_scale('pcap_secs', x_range);
-          for (idx in to_plot) {
+          for (var idx in to_plot) {
             add_scale(to_plot[idx], y_range);
           }
         }
@@ -222,7 +223,7 @@
             if (!d.hasOwnProperty('ta') || !d.hasOwnProperty('ra'))
               return false;
 
-            for (idx in to_plot) {
+            for (var idx in to_plot) {
               if (!d.hasOwnProperty(to_plot[idx])) return false;
             }
             return true;
@@ -252,7 +253,7 @@
         function draw() {
           add_butter_bar();
 
-          for (idx in to_plot) {
+          for (var idx in to_plot) {
             visualize(to_plot[idx]);
           }
           add_legend();
@@ -287,14 +288,14 @@
             .attr('width', width)
             .attr('height', height);
 
-          font_width = 6;
-          key_length = font_width * ((12 + 5) * 2 + 1);
-          total_length = key_length + 4.5 * padding;
-          n_cols = Math.floor(total_width / total_length);
+          var font_width = 6;
+          var key_length = font_width * ((12 + 5) * 2 + 1);
+          var total_length = key_length + 4.5 * padding;
+          var n_cols = Math.floor(total_width / total_length);
 
           stream2packets.forEach(function(d, i) {
-            col = i % n_cols;
-            row = Math.floor(i / n_cols);
+            var col = i % n_cols;
+            var row = Math.floor(i / n_cols);
             svg.append('text')
               .attr('id', 'legend_' + to_valid_selector_id(d.key))
               .attr('x', col * total_length + 2 * padding)
@@ -360,11 +361,11 @@
           var focus = svg.append('g')
             .attr("class", "focus")
             .style('display', null);
-            
+
           reticle[field] = focus;
 
           stream2packets.forEach(function(d, i) {
-            current_plot_id = 'pcap_vs_' + field + '_' + to_valid_selector_id(d.key);
+            var current_plot_id = 'pcap_vs_' + field + '_' + to_valid_selector_id(d.key);
             log(current_plot_id + ' (' + get_colour(i) + ')');
             log(d.key + "(" + d.values.length + ")");
 
@@ -426,8 +427,8 @@
               .style('fill', 'none')
               .style('pointer-events', 'all')
               .on('mouseover', function() {
-                for (i in Object.keys(reticle)) {
-                  current = reticle[Object.keys(reticle)[i]];
+                for (var i in Object.keys(reticle)) {
+                  var current = reticle[Object.keys(reticle)[i]];
                   current.style('display', null);
                   current.select('.y').style('display', null);
                   current.select('circle.y').style('display', null);
@@ -435,7 +436,7 @@
                 }
               })
               .on('mouseout', function() {
-                x = d3.mouse(this)[0];
+                var x = d3.mouse(this)[0];
                 if (x < scales['pcap_secs'].range()[0] ||
                     x > scales['pcap_secs'].range()[1]) {
                   for (i in Object.keys(reticle)) {
@@ -448,7 +449,7 @@
                 d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], field);
                 if (!d) return;
 
-                for (idx in stream2packets) {
+                for (var idx in stream2packets) {
                   if (stream2packets[idx].key == to_stream_key(d)) {
                     set_selected_stream(stream2packets[idx]);
                     break;
@@ -480,37 +481,37 @@
               y > total_height)
             return;
 
-          pcap_secs = scales['pcap_secs'].invert(x);
-          search_in = dataset;
+          var pcap_secs = scales['pcap_secs'].invert(x);
+          var search_in = dataset;
 
           if (selected_stream) {
             search_in = selected_stream.values;
           }
 
-          idx = binary_search_by('pcap_secs')(search_in, pcap_secs, 0);
+          var idx = binary_search_by('pcap_secs')(search_in, pcap_secs, 0);
           d = closest_to_y(search_in, idx, x, y, scaled(field), field);
 
           return d;
         }
 
         function closest_to_y(search_in, idx, x, y, scaled_y, field) {
-          idx_range = 50;
-          x_range = 10;
-          scaled_x = scaled('pcap_secs');
+          var idx_range = 50;
+          var x_range = 10;
+          var scaled_x = scaled('pcap_secs');
 
           idx = Math.abs(x - scaled_x(search_in[idx - 1])) >
                 Math.abs(x - scaled_x(search_in[idx])) ?
                 idx : idx - 1;
 
-          begin = Math.max(0, idx - idx_range);
-          end = Math.min(search_in.length - 1, idx + idx_range);
+          var begin = Math.max(0, idx - idx_range);
+          var end = Math.min(search_in.length - 1, idx + idx_range);
 
-          closest_idx = idx;
+          var closest_idx = idx;
 
-          min_x = Math.abs(x - scaled_x(search_in[idx]));
-          min_y = Math.abs(y - scaled_y(search_in[idx]));
+          var min_x = Math.abs(x - scaled_x(search_in[idx]));
+          var min_y = Math.abs(y - scaled_y(search_in[idx]));
 
-          for (i = begin; i <= end; i++) {
+          for (var i = begin; i <= end; i++) {
             if (Math.abs(x - scaled_x(search_in[i])) > x_range) {
               continue; // too far away
             }
@@ -527,11 +528,11 @@
         }
 
         function draw_crosshairs(d, field) {
-          for (i in Object.keys(reticle)) {
-            r_field = Object.keys(reticle)[i];
+          for (var i in Object.keys(reticle)) {
+            var r_field = Object.keys(reticle)[i];
 
-            closest_x = scaled('pcap_secs')(d);
-            closest_y = scaled(r_field)(d);
+            var closest_x = scaled('pcap_secs')(d);
+            var closest_y = scaled(r_field)(d);
 
             reticle[r_field].select('.x')
               .attr('transform', 'translate(' + closest_x + ',0)');
