@@ -357,7 +357,10 @@
             .attr('width', width)
             .attr('height', height);
 
-          var focus = svg.append('g').attr("class", "focus").style('display', null);
+          var focus = svg.append('g')
+            .attr("class", "focus")
+            .style('display', null);
+            
           reticle[field] = focus;
 
           stream2packets.forEach(function(d, i) {
