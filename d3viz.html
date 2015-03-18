@@ -48,11 +48,35 @@
       fill: #185195;
     }
 
+    #tooltip {
+      position: absolute;
+      width: 170px;
+      height: auto;
+      padding: 5px 10px;
+      right: 70px;
+      font-weight: 500;
+      background-color: rgba(250, 250, 250, 0.9);
+      -webkit-box-shadow: 0 0 5px rgba(0, 0, 0, 0.7);
+      -moz-box-shadow: 0 0 5px rgba(0, 0, 0, 0.7);
+      box-shadow: 0 0 4px rgba(0, 0, 0, 0.7);
+      pointer-events: none;
+    }
+
+    #tooltip text {
+      margin: 0;
+      font-size: 12px;
+    }
+
+    .hidden {
+      display: none;
+    }
+
     </style>
     <title>WiFi packets as seen from the space</title>
   </head>
   <body>
-
+  <div id="tooltip" class="hidden">
+  </div>
   <script type='text/javascript'
         src='//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js'></script>
       <script type='text/javascript' src='http://d3js.org/d3.v3.min.js'></script>
@@ -80,9 +104,11 @@
 
         var total_width = w.innerWidth || e.clientWidth || g.clientWidth;
         var total_height = w.innerHeight || e.clientHeight || g.clientHeight;
-        var width;  // of a plot
+        var sidebar_width = 180;
+        var width; // of a plot
         var height; // of a plot
         var padding = 20;
+        var tooltipLabelsHeight = 15; // height per line in detailed mouseover view
 
         var field_settings = {
           'pcap_secs': {
@@ -102,6 +128,30 @@
             'scale_type': d3.scale.linear(),
           }
         }
+
+        var availableMetrics = ["antenna",
+            "channel_flags", 
+            "dbm_antnoise", 
+            "dbm_antsignal",
+            "dsmode", 
+            "duration", 
+            "flags",
+            "frag",
+            "freq",
+            "incl_len",
+            "mac_usecs",
+            "order",
+            "orig_len",
+            "pcap_secs",
+            "powerman",
+            "ta",
+            "type",
+            "typestr",
+            "ra",
+            "rate",
+            "retry",
+            "seq",
+            "xa"];
 
         function settings(field) {
           if (field_settings.hasOwnProperty(field))
@@ -202,7 +252,7 @@
 
           // TODO(katepek): Recalculate and redraw when resized
           height = (total_height - 3 * to_plot.length * padding) / to_plot.length;
-          width = total_width - 4 * padding;
+          width = total_width - 4 * padding - sidebar_width;
 
           var x_range = [padding, width - 3 * padding];
           var y_range = [height - 1.5 * padding, 1.5 * padding];
@@ -327,6 +377,14 @@
             .style('opacity', 0);
         }
 
+
+        var details = d3.select('#tooltip')
+                        .style('top',  (2 * padding) + 'px')
+                        .classed('hidden', true)
+                        .append("svg")
+                        .attr("width", 200)
+                        .attr("height", availableMetrics.length * tooltipLabelsHeight);
+
         function visualize(field) {
           log('About to visualize ' + field);
 
@@ -419,9 +477,10 @@
                 var x = d3.mouse(this)[0];
                 if (x < scales['pcap_secs'].range()[0] ||
                     x > scales['pcap_secs'].range()[1]) {
-                  for (var i in Object.keys(reticle)) {
-                    reticle[Object.keys(reticle)[i]].style('display', 'none');
-                  }
+                    d3.select('#tooltip').classed("hidden", true)
+                    for (var i in Object.keys(reticle)) {
+                      reticle[Object.keys(reticle)[i]].style('display', 'none');
+                    }
                 }
               })
               .on('click', function() {
@@ -495,6 +554,8 @@
         }
 
         function draw_crosshairs(d, field) {
+          var detailedInfo = d;
+
           for (var i in Object.keys(reticle)) {
             var r_field = Object.keys(reticle)[i];
 
@@ -502,19 +563,29 @@
             var closest_y = scaled(r_field)(d);
 
             reticle[r_field].select('.x')
-              .attr('transform', 'translate(' + closest_x + ',0)');
+              .attr('transform', 'translate(' + closest_x + 10 + ',0)');
             reticle[r_field].select('.y')
               .attr('transform', 'translate(0,' + closest_y + ')');
 
             reticle[r_field].select('circle.y')
                 .attr('transform',
                       'translate(' + closest_x + ',' + closest_y + ')');
-            reticle[r_field].select('text.y1')
-              .attr('transform',
-                    'translate(' + closest_x + ',' + closest_y + ')')
-              .text('milliseconds=' + milliseconds(d['pcap_secs']) +
-                '; ' + r_field + '=' + d[r_field]);
-          }
+            }
+
+            d3.select('#tooltip')
+              .classed('hidden', false).select("svg")
+              .selectAll('.tooltipValues')
+                .data(availableMetrics)
+                .enter()
+                .append("text")
+                  .attr("class", "tooltipValues")
+                  .attr("y", function(k,i){return i * tooltipLabelsHeight + 10})
+                    .text(function(k){return k + ": " + detailedInfo[availableMetrics]});
+
+            d3.selectAll(".tooltipValues")
+              .data(availableMetrics)
+                .text(function(k){return k + ": " + detailedInfo[k]});
+
         }
 
         function select_stream(streamId) {
@@ -554,6 +625,7 @@
         function milliseconds(d) {
           return d3.time.format("%L")(new Date(d * 1000))
         }
+
 
       </script>
 
