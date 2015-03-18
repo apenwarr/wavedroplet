@@ -136,6 +136,7 @@
           console.log(error);
         }
 
+
         function get_key() {
           parts = window.location.pathname.split('/');
           return parts[parts.length - 1];
@@ -278,7 +279,7 @@
             .attr('x', width / 2 - 4 * padding)
             .attr('y', 2 + padding / 2)
             .style('fill', 'black')
-            .style('font-size', 14  );
+            .style('font-size', 14);
         }
 
         function add_legend() {
@@ -362,6 +363,7 @@
           // TODO(katepek): Axes seem to show range, not the domain
           var pcapSecsAxis = d3.svg.axis()
             .scale(scales['pcap_secs'])
+            .tickFormat(hourMinuteMilliseconds)
             .orient('bottom')
             .ticks(5);
           var yAxis = d3.svg.axis()
@@ -417,7 +419,7 @@
                 var x = d3.mouse(this)[0];
                 if (x < scales['pcap_secs'].range()[0] ||
                     x > scales['pcap_secs'].range()[1]) {
-                  for (i in Object.keys(reticle)) {
+                  for (var i in Object.keys(reticle)) {
                     reticle[Object.keys(reticle)[i]].style('display', 'none');
                   }
                 }
@@ -510,7 +512,7 @@
             reticle[r_field].select('text.y1')
               .attr('transform',
                     'translate(' + closest_x + ',' + closest_y + ')')
-              .text('secs=' + d['pcap_secs'] +
+              .text('milliseconds=' + milliseconds(d['pcap_secs']) +
                 '; ' + r_field + '=' + d[r_field]);
           }
         }
@@ -526,14 +528,14 @@
             // select current legend
             d3.select('#legend_' + streamId).classed("selected", true);
             // select these points
-            for (idx in to_plot){ 
+            for (var idx in to_plot){ 
               d3.selectAll('#pcap_vs_' + to_plot[idx] + '_' + streamId).attr("fill", "red")
             }
             // update selected_stream key/value pair
-            for (idx in stream2packets) {
+            for (var idx in stream2packets) {
               if (to_valid_selector_id(stream2packets[idx].key) == streamId) {
                 // set selected_stream so that it's locked to that stream when mousing over
-                butter_bar('Locked down to ' + stream2packets[idx]);
+                butter_bar('Locked down to ' + stream2packets[idx].key);
                 selected_stream = stream2packets[idx];
                 break;
               }
@@ -542,6 +544,15 @@
             selected_stream = null;
             butter_bar('Unlocked')
           }
+        }
+
+        // time formatting functions
+        function hourMinuteMilliseconds(d) {
+          return d3.time.format("%H:%M:%S")(new Date(d * 1000))
+        }
+
+        function milliseconds(d) {
+          return d3.time.format("%L")(new Date(d * 1000))
         }
 
       </script>
