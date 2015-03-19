@@ -428,13 +428,23 @@
             .scale(scales[field])
             .orient('right')
             .ticks(5);
+
+
+          // set up zoom
+          var zoom = d3.behavior.zoom().x(scales['pcap_secs']).on("zoom", showZoom);
+
+          function showZoom(d) {
+            d3.selectAll(".axis.x").call(pcapSecsAxis);
+            d3.selectAll(".points").attr('cx', scaled('pcap_secs'))
+          }
+          // end zooming
           
           svg.append('g')
-            .attr('class', 'axis')
+            .attr('class', 'axis x')
             .attr('transform', 'translate(0,' + (height - 1.5 * padding) + ')')
             .call(pcapSecsAxis);
           svg.append('g')
-            .attr('class', 'axis')
+            .attr('class', 'axis y')
             .attr('transform', 'translate(' + (width - 3 * padding) + ',0)')
             .call(yAxis);
 
@@ -462,8 +472,10 @@
           svg.append('rect')
               .attr('width', width)
               .attr('height', height)
+              .attr("class", "plotRect")
               .style('fill', 'none')
               .style('pointer-events', 'all')
+              .call(zoom)
               .on('mouseover', function() {
                 for (var i in Object.keys(reticle)) {
                   var current = reticle[Object.keys(reticle)[i]];
@@ -628,7 +640,8 @@
         function milliseconds(d) {
           return d3.time.format("%L")(new Date(d * 1000))
         }
-        
+
+
 
       </script>
 
