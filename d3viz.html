@@ -428,7 +428,7 @@
             .scale(scales[field])
             .orient('right')
             .ticks(5);
-
+          
           svg.append('g')
             .attr('class', 'axis')
             .attr('transform', 'translate(0,' + (height - 1.5 * padding) + ')')
@@ -525,10 +525,13 @@
           var x_range = 10;
           var scaled_x = scaled('pcap_secs');
 
-          idx = Math.abs(x - scaled_x(search_in[idx - 1])) >
-                Math.abs(x - scaled_x(search_in[idx])) ?
-                idx : idx - 1;
-
+          if(search_in.length > 1){
+            idx = Math.abs(x - scaled_x(search_in[idx - 1])) >
+                  Math.abs(x - scaled_x(search_in[idx])) ?
+                  idx : idx - 1;
+          } else {
+            idx = 0;
+          }
           var begin = Math.max(0, idx - idx_range);
           var end = Math.min(search_in.length - 1, idx + idx_range);
 
@@ -625,7 +628,7 @@
         function milliseconds(d) {
           return d3.time.format("%L")(new Date(d * 1000))
         }
-
+        
 
       </script>
 
