@@ -12,7 +12,12 @@
 
     .selected {
       font-weight: bold;
-      fill: red;
+      fill: orange;
+    }
+
+    .selectedCompliment {
+      font-weight: bold;
+      fill: #0D6AEB;
     }
 
     .axis path,
@@ -204,7 +209,11 @@
         function to_stream_key(d) {
           return d['ta'] + '-' + d['ra'];
         }
-
+/*
+        function to_stream_opposite_key(d) {
+          return d['ra'] + '-' + d['ta'];
+        }
+*/
         function from_stream_key(key) {
           return {'ta': key.split('-')[0], 'ra': key.split('-')[1]};
         }
@@ -212,6 +221,22 @@
         function to_valid_selector_id(key) {
           return key.replace(/:/g, '').replace('-', '_');
         }
+
+        function compliment_stream_id(key) {
+          var re = /(([a-f]|[0-9])+)_(([a-f]|[0-9])+)/
+          var z = key.match(re)
+          return z[3] + "_" + z[1]
+        }
+
+        /*
+        function to_opposite_valid_selector_id(key) {
+          var re = /(([a-f]|[0-9]|:)+)\-(([a-f]|[0-9]|:)+)/
+          var z = key.match(re)
+          key = z[3] + "-" + z[1]
+          return key.replace(/:/g, '').replace('-', '_');
+        }
+        */
+
 
         function init(json_string) {
           // TODO(katepek): Should sanitize here? E.g., discard bad packets?
@@ -605,7 +630,7 @@
 
         function select_stream(streamId) {
           // unselect all legends
-          d3.selectAll(".legend").classed("selected", false);
+          d3.selectAll(".legend").classed("selected selectedCompliment", false);
           // unselect all points
           d3.selectAll(".points").attr("fill", "grey")
 
@@ -613,11 +638,14 @@
           if (!selected_stream || streamId != to_valid_selector_id(selected_stream.key)){
             // select current legend
             d3.select('#legend_' + streamId).classed("selected", true);
+            d3.select('#legend_' + compliment_stream_id(streamId)).classed("selectedCompliment", true); 
             // select these points
             for (var idx in to_plot){ 
-              d3.selectAll('#pcap_vs_' + to_plot[idx] + '_' + streamId).attr("fill", "red")
+              console.log(streamId, compliment_stream_id(streamId));
+              d3.selectAll('#pcap_vs_' + to_plot[idx] + '_' + streamId).attr("fill", "orange")
+              d3.selectAll('#pcap_vs_' + to_plot[idx] + '_' + compliment_stream_id(streamId)).attr("fill", "#0D6AEB")
             }
-            // update selected_stream key/value pair
+            // to do - make this work for flip also 
             for (var idx in stream2packets) {
               if (to_valid_selector_id(stream2packets[idx].key) == streamId) {
                 // set selected_stream so that it's locked to that stream when mousing over
