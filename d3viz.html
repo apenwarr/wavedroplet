@@ -95,7 +95,7 @@
         // in sandbox/)
         "use strict";
 
-        var debug = false;
+        var debug = true;
         function log(o) {
           if (debug) {
             console.log(o);
@@ -118,21 +118,22 @@
         var field_settings = {
           'pcap_secs': {
             'parser': parseFloat,
-            'scale_type': d3.scale.linear(),
+            'scale_type': 'linear',
           },
           'seq': {
             'parser': Number,
-            'scale_type': d3.scale.linear(),
+            'scale_type': 'linear',
           },
           'rate': {
             'parser': Number,
-            'scale_type': d3.scale.log(),
+            'scale_type': 'log',
           },
           'default': {
             'parser': parseFloat,
-            'scale_type': d3.scale.linear(),
+            'scale_type': 'linear',
           }
         }
+
 
         var availableMetrics = ["antenna",
             "channel_flags", 
@@ -309,7 +310,7 @@
         }
 
         function add_scale(field, range) {
-          scales[field] = settings(field)['scale_type']
+          scales[field] = d3.scale[settings(field)['scale_type']]()
             .domain([d3.min(dataset, raw(field)),
               d3.max(dataset, raw(field))])
             .range(range);
@@ -428,7 +429,7 @@
 
           stream2packets.forEach(function(d, i) {
             var current_plot_id = 'pcap_vs_' + field + '_' + to_valid_selector_id(d.key);
-            log(d.key + "(" + d.values.length + ")");
+            //log(d.key + "(" + d.values.length + ")");
 
             svg
               .selectAll(current_plot_id)
@@ -449,6 +450,7 @@
             .tickFormat(hourMinuteMilliseconds)
             .orient('bottom')
             .ticks(5);
+            
           var yAxis = d3.svg.axis()
             .scale(scales[field])
             .orient('right')
@@ -641,7 +643,6 @@
             d3.select('#legend_' + compliment_stream_id(streamId)).classed("selectedCompliment", true); 
             // select these points
             for (var idx in to_plot){ 
-              console.log(streamId, compliment_stream_id(streamId));
               d3.selectAll('#pcap_vs_' + to_plot[idx] + '_' + streamId).attr("fill", "orange")
               d3.selectAll('#pcap_vs_' + to_plot[idx] + '_' + compliment_stream_id(streamId)).attr("fill", "#0D6AEB")
             }
