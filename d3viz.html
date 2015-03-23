@@ -5,9 +5,14 @@
     <style>
 
     .legend {
+      fill: gray;
       font-size: 14px;
-      font-weight: bold;
       text-anchor: left;
+    }
+
+    .selected {
+      font-weight: bold;
+      fill: red;
     }
 
     .axis path,
@@ -78,11 +83,6 @@
         var width;  // of a plot
         var height; // of a plot
         var padding = 20;
-
-        // TODO(katepek): Pull in some standard library for this
-        var stream_colours =
-          ['grey', 'red', 'blue', 'green', 'magenta',
-           'black', 'hotpink', 'chocolate', 'deepskyblue', 'gold'];
 
         var field_settings = {
           'pcap_secs': {
@@ -180,6 +180,7 @@
             return raw('pcap_secs')(x) - raw('pcap_secs')(y);
           });
 
+          // zan: todo - make this a dictionary? 
           stream2packets = d3.nest()
             .key(function(d) {return to_stream_key(d);})
             .sortKeys(function(key1, key2) {
@@ -301,34 +302,11 @@
               .attr('x', col * total_length + 2 * padding)
               .attr('y', (row + 1.5) * padding)
               .attr('class', 'legend')
-              .style('fill', get_colour(i))
               .text(d.key)
               .on('click', function(){
-                set_selected_stream(d);
+                select_stream(this.id.match(/legend_(.*)/)[1]);
             });
           });
-        }
-
-        function set_selected_stream(stream) {
-          if (selected_stream != null) {
-            d3.select('text#legend_' + to_valid_selector_id(selected_stream.key))
-              .transition().style('font-size', 16);
-          }
-          if (stream && selected_stream &&
-            stream.key == selected_stream.key) {
-            stream = null;
-          }
-          if (stream) {
-            d3.select('text#legend_' + to_valid_selector_id(stream.key))
-              .transition().style('font-size', 22);
-          }
-          selected_stream = stream;
-
-          if (selected_stream) {
-            butter_bar('Locked down to ' + selected_stream.key);
-          } else {
-            butter_bar('Not locked');
-          }
         }
 
         function butter_bar(text) {
@@ -366,7 +344,6 @@
 
           stream2packets.forEach(function(d, i) {
             var current_plot_id = 'pcap_vs_' + field + '_' + to_valid_selector_id(d.key);
-            log(current_plot_id + ' (' + get_colour(i) + ')');
             log(d.key + "(" + d.values.length + ")");
 
             svg
@@ -374,10 +351,11 @@
               .data(d.values)
               .enter()
               .append('circle')
+              .attr('class', 'points')
               .attr('cx', scaled('pcap_secs'))
               .attr('cy', scaled(field))
+              .attr('fill', 'grey')
               .attr('r', 2)
-              .attr('fill', get_colour(i))
               .attr('id', current_plot_id);
           });
 
@@ -445,17 +423,9 @@
                 }
               })
               .on('click', function() {
-                set_selected_stream(null);
                 d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], field);
                 if (!d) return;
-
-                for (var idx in stream2packets) {
-                  if (stream2packets[idx].key == to_stream_key(d)) {
-                    set_selected_stream(stream2packets[idx]);
-                    break;
-                  }
-                }
-
+                select_stream(to_valid_selector_id(to_stream_key(d)));
                 draw_crosshairs(d, field);
               })
               .on('mousemove', function() {
@@ -463,12 +433,6 @@
                 if (!d) return;
                 draw_crosshairs(d, field);
               });
-        }
-
-        function get_colour(i) {
-          if (i < stream_colours.length)
-            return stream_colours[i];
-          return stream_colours[i % stream_colours.length];
         }
 
         function binary_search_by(field) {
@@ -484,6 +448,7 @@
           var pcap_secs = scales['pcap_secs'].invert(x);
           var search_in = dataset;
 
+          // this mouseover to a particular stream - will maintain functionality for now
           if (selected_stream) {
             search_in = selected_stream.values;
           }
@@ -547,6 +512,35 @@
                     'translate(' + closest_x + ',' + closest_y + ')')
               .text('secs=' + d['pcap_secs'] +
                 '; ' + r_field + '=' + d[r_field]);
+          }
+        }
+
+        function select_stream(streamId) {
+          // unselect all legends
+          d3.selectAll(".legend").classed("selected", false);
+          // unselect all points
+          d3.selectAll(".points").attr("fill", "grey")
+
+          // if new stream selected, update view & selected stream
+          if (!selected_stream || streamId != to_valid_selector_id(selected_stream.key)){
+            // select current legend
+            d3.select('#legend_' + streamId).classed("selected", true);
+            // select these points
+            for (idx in to_plot){ 
+              d3.selectAll('#pcap_vs_' + to_plot[idx] + '_' + streamId).attr("fill", "red")
+            }
+            // update selected_stream key/value pair
+            for (idx in stream2packets) {
+              if (to_valid_selector_id(stream2packets[idx].key) == streamId) {
+                // set selected_stream so that it's locked to that stream when mousing over
+                butter_bar('Locked down to ' + stream2packets[idx]);
+                selected_stream = stream2packets[idx];
+                break;
+              }
+            }
+          } else {
+            selected_stream = null;
+            butter_bar('Unlocked')
           }
         }
 
