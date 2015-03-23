@@ -350,7 +350,7 @@
           var svg = d3
             .select('body')
             .append('svg')
-            .attr('id', 'legend')
+            .attr('class', 'legend')
             .attr('width', width)
             .attr('height', height);
 
@@ -363,13 +363,12 @@
             var col = i % n_cols;
             var row = Math.floor(i / n_cols);
             svg.append('text')
-              .attr('id', 'legend_' + to_valid_selector_id(d.key))
+              .attr('class', 'legend legend_' + to_valid_selector_id(d.key))
               .attr('x', col * total_length + 2 * padding)
               .attr('y', (row + 1.5) * padding)
-              .attr('class', 'legend')
               .text(d.key)
               .on('click', function(){
-                select_stream(this.id.match(/legend_(.*)/)[1]);
+                select_stream(to_valid_selector_id(this.textContent));
             });
           });
         }
@@ -405,7 +404,7 @@
           var svg = d3
             .select('body')
             .append('svg')
-            .attr('id', 'plot_' + field)
+            .attr('class', 'plot_' + field)
             .attr('width', width)
             .attr('height', height);
 
@@ -423,12 +422,11 @@
               .data(d.values)
               .enter()
               .append('circle')
-              .attr('class', 'points')
+              .attr('class', 'points ' + current_plot_id)
               .attr('cx', scaled('pcap_secs'))
               .attr('cy', scaled(field))
               .attr('fill', 'grey')
-              .attr('r', 2)
-              .attr('id', current_plot_id);
+              .attr('r', 2);
           });
 
           // TODO(katepek): Axes seem to show range, not the domain
@@ -450,7 +448,6 @@
           function showZoom(d) {
             d3.selectAll(".axis.x").call(pcapSecsAxis);
             d3.selectAll(".points").attr('cx', scaled('pcap_secs'))
-            console.log(zoom.scale())
           }
           // end zooming
           
@@ -627,12 +624,12 @@
           // if new stream selected, update view & selected stream
           if (!selected_stream || streamId != to_valid_selector_id(selected_stream.key)){
             // select current legend
-            d3.select('#legend_' + streamId).classed("selected", true);
-            d3.select('#legend_' + complement_stream_id(streamId)).classed("selectedComplement", true); 
+            d3.select('.legend_' + streamId).classed("selected", true);
+            d3.select('.legend_' + complement_stream_id(streamId)).classed("selectedComplement", true); 
             // select these points
             for (var idx in to_plot){ 
-              d3.selectAll('#pcap_vs_' + to_plot[idx] + '_' + streamId).attr("fill", "orange")
-              d3.selectAll('#pcap_vs_' + to_plot[idx] + '_' + complement_stream_id(streamId)).attr("fill", "#0D6AEB")
+              d3.selectAll('.pcap_vs_' + to_plot[idx] + '_' + streamId).attr("fill", "orange")
+              d3.selectAll('.pcap_vs_' + to_plot[idx] + '_' + complement_stream_id(streamId)).attr("fill", "#0D6AEB")
             }
             // to do - make this work for flip also 
             for (var idx in stream2packets) {
