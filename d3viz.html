@@ -194,19 +194,10 @@
           console.log(error);
         }
 
-
-        function get_key() {
-          parts = window.location.pathname.split('/');
-          return parts[parts.length - 1];
-        }
-
         function get_query_param(param) {
-         var params = window.location.search.substring(1).split('&');
-         for (var idx in params) {
-           if (params[idx].indexOf(param + '=') == 0)
-             return params[idx].split('=')[1].split(',');
-         }
-         return [];
+          var urlKeyValuePairs = {}
+          window.location.search.split("?")[1].split("&").forEach(function(d) {var m = d.split("="); urlKeyValuePairs[m[0]] = m[1] })
+          return urlKeyValuePairs[param].split(',')
         }
 
         function to_stream_key(d) {
