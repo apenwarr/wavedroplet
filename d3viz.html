@@ -173,11 +173,11 @@
         var streams; // streams: pairs of (transmitter, receiver)
         // dataset split by streams as a list of key-value pairs (key ='ta-ra')
         // sorted descending by the number of packets belonging to each stream
-        var stream2packets;
+        var stream2packetsDict = {};
+        var stream2packetsArray = [];
 
         // When not null, crosshairs will focus only on packets for this stream.
         var selected_stream = null; // one of the key-value pairs of stream2packets
-
         
         // input json file found at URL + '/json/' + get_query_param('key')[0]
         try {
@@ -201,15 +201,23 @@
         }
 
         function to_stream_key(d) {
-          return d['ta'] + '-' + d['ra'];
+          return d['ta'].replace(/:/g, '') + '_' + d['ra'].replace(/:/g, '');
         }
         
+        // there must be a beter way... 
         function from_stream_key(key) {
-          return {'ta': key.split('-')[0], 'ra': key.split('-')[1]};
-        }
-
-        function to_valid_selector_id(key) {
-          return key.replace(/:/g, '').replace('-', '_');
+          var z = key.split('_')
+          var ta = z[0].slice(0,2) + ':' + z[0].slice(2,4) + 
+            ':' + z[0].slice(4,6) + 
+            ':' + z[0].slice(6,8) + 
+            ':' + z[0].slice(8,10) + 
+            ':' + z[0].slice(10,12);
+          var ra = z[1].slice(0,2) + ':' + z[1].slice(2,4) + 
+            ':' + z[1].slice(4,6) + 
+            ':' + z[1].slice(6,8) + 
+            ':' + z[1].slice(8,10) + 
+            ':' + z[1].slice(10,12);
+          return {'ta': ta, 'ra': ra};
         }
 
         function complement_stream_id(key) {
@@ -236,24 +244,21 @@
             return raw('pcap_secs')(x) - raw('pcap_secs')(y);
           });
 
-          // zan: todo - make this a dictionary? 
-          stream2packets = d3.nest()
-            .key(function(d) {return to_stream_key(d);})
-            .sortKeys(function(key1, key2) {
-              var stream1 = from_stream_key(key1);
-              var stream2 = from_stream_key(key2);
-              var stream1_packets = dataset.filter(function(d) {
-                return d['ta'] == stream1['ta'] &&
-                       d['ra'] == stream1['ra'];
-              });
-              var stream2_packets = dataset.filter(function(d) {
-                return d['ta'] == stream2['ta'] &&
-                       d['ra'] == stream2['ra'];
-              });
 
-              return stream2_packets.length - stream1_packets.length;
-            })
-            .entries(dataset);
+          dataset.forEach(function(d){
+            var streamId = to_stream_key(d);
+            if(!stream2packetsDict[streamId]){
+              stream2packetsDict[streamId] = {
+                values: [d]
+              };
+              stream2packetsArray.push(streamId);
+            } else {
+              stream2packetsDict[streamId].values.push(d);
+            }
+          })
+
+          stream2packetsArray.sort(function(a,b){return stream2packetsDict[b].values.length - stream2packetsDict[a].values.length})
+
 
           // TODO(katepek): Recalculate and redraw when resized
           height = (total_height - 3 * to_plot.length * padding) / to_plot.length;
@@ -266,10 +271,9 @@
           log('height = ' + height);
 
           add_scale('pcap_secs', x_range);
-          for (var idx in to_plot) {
-            add_scale(to_plot[idx], y_range);
-          }
+          to_plot.forEach(function(d){add_scale(d, y_range)});
         }
+        
 
         function sanitize_dataset() {
           log('Before filtering: ' + dataset.length);
@@ -310,9 +314,8 @@
         function draw() {
           add_butter_bar();
 
-          for (var idx in to_plot) {
-            visualize(to_plot[idx]);
-          }
+          to_plot.forEach(function(d){visualize(d)})
+
           add_legend();
         }
 
@@ -350,18 +353,25 @@
           var total_length = key_length + 4.5 * padding;
           var n_cols = Math.floor(total_width / total_length);
 
-          stream2packets.forEach(function(d, i) {
-            var col = i % n_cols;
-            var row = Math.floor(i / n_cols);
-            svg.append('text')
-              .attr('class', 'legend legend_' + to_valid_selector_id(d.key))
-              .attr('x', col * total_length + 2 * padding)
-              .attr('y', (row + 1.5) * padding)
-              .text(d.key)
-              .on('click', function(){
-                select_stream(to_valid_selector_id(this.textContent));
-            });
-          });
+          for(var i in stream2packetsArray){
+            var streamId = stream2packetsArray[i];
+            var count = stream2packetsDict[streamId].values.length;
+            // only show on legend if more than 50 packets belong to this stream
+            if(count > 50){
+              var col = i % n_cols;
+              var row = Math.floor(i / n_cols);
+              svg.append('text')
+                .attr('class', 'legend legend_' + streamId)
+                .attr('x', col * total_length + 2 * padding)
+                .attr('y', (row + 1.5) * padding)
+                .text(streamId)
+                .on('click', function(){
+                  select_stream(this.textContent);
+              });
+            } else {
+              break;
+            }
+          }
         }
 
         function butter_bar(text) {
@@ -405,12 +415,12 @@
 
           reticle[field] = focus;
 
-          stream2packets.forEach(function(d, i) {
-            var current_plot_id = 'pcap_vs_' + field + '_' + to_valid_selector_id(d.key);
+          stream2packetsArray.forEach(function(d, i) {
+            var current_plot_id = 'pcap_vs_' + field + '_' + d;
 
             svg
               .selectAll(current_plot_id)
-              .data(d.values)
+              .data(stream2packetsDict[d].values)
               .enter()
               .append('circle')
               .attr('class', 'points ' + current_plot_id)
@@ -501,7 +511,7 @@
               .on('click', function() {
                 d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], field);
                 if (!d) return;
-                select_stream(to_valid_selector_id(to_stream_key(d)));
+                select_stream(to_stream_key(d));
                 draw_crosshairs(d, field);
               })
               .on('mousemove', function() {
@@ -526,7 +536,7 @@
 
           // this mouseover to a particular stream - will maintain functionality for now
           if (selected_stream) {
-            search_in = selected_stream.values;
+            search_in = stream2packetsDict[selected_stream].values;
           }
 
           var idx = binary_search_by('pcap_secs')(search_in, pcap_secs, 0);
@@ -613,7 +623,7 @@
           d3.selectAll(".points").attr("fill", "grey")
 
           // if new stream selected, update view & selected stream
-          if (!selected_stream || streamId != to_valid_selector_id(selected_stream.key)){
+          if (!selected_stream || streamId != selected_stream){
             // select current legend
             d3.select('.legend_' + streamId).classed("selected", true);
             d3.select('.legend_' + complement_stream_id(streamId)).classed("selectedComplement", true); 
@@ -622,16 +632,10 @@
               d3.selectAll('.pcap_vs_' + to_plot[idx] + '_' + streamId).attr("fill", "orange")
               d3.selectAll('.pcap_vs_' + to_plot[idx] + '_' + complement_stream_id(streamId)).attr("fill", "#0D6AEB")
             }
-            // to do - make this work for flip also 
-            for (var idx in stream2packets) {
-              if (to_valid_selector_id(stream2packets[idx].key) == streamId) {
-                // set selected_stream so that it's locked to that stream when mousing over
-                butter_bar('Locked down to ' + stream2packets[idx].key);
-                selected_stream = stream2packets[idx];
-                break;
-              }
-            }
-          } else {
+
+            selected_stream = streamId;
+            butter_bar('Locked to: ' + streamId)
+            } else {
             selected_stream = null;
             butter_bar('Unlocked')
           }
