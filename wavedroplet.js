@@ -502,9 +502,7 @@ function closest_to_y(search_in, idx, x, y, scaled_y, field) {
 function draw_crosshairs(d, field) {
     var detailedInfo = d;
 
-    for (var i in Object.keys(reticle)) {
-        var r_field = Object.keys(reticle)[i];
-
+    for (var r_field in reticle) {
         var closest_x = scaled('pcap_secs')(d);
         var closest_y = scaled(r_field)(d);
 
@@ -549,7 +547,11 @@ function select_stream(streamId) {
         d3.select('.legend_' + complement_stream_id(streamId)).classed("selectedComplement", true).classed("selected", false);
         // select these points
         for (var idx in to_plot) {
-            d3.selectAll('.pcap_vs_' + to_plot[idx] + '_' + streamId).classed("selected", true).classed("selectedComplement", false);
+
+            d3.selectAll('.pcap_vs_' + to_plot[idx] + '_' + streamId)
+                .classed("selected", true)
+                .classed("selectedComplement", false);
+
             d3.selectAll('.pcap_vs_' + to_plot[idx] + '_' + complement_stream_id(streamId))
                 .classed("selectedComplement", true)
                 .classed("selected", false);
