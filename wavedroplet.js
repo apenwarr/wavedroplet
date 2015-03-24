@@ -21,26 +21,6 @@ var height; // of a plot
 var padding = 20;
 var tooltipLabelsHeight = 15; // height per line in detailed mouseover view
 
-var field_settings = {
-    'pcap_secs': {
-        'parser': parseFloat,
-        'scale_type': 'linear',
-    },
-    'seq': {
-        'parser': Number,
-        'scale_type': 'linear',
-    },
-    'rate': {
-        'parser': Number,
-        'scale_type': 'log',
-    },
-    'default': {
-        'parser': parseFloat,
-        'scale_type': 'linear',
-    }
-}
-
-
 var availableMetrics = ["antenna",
     "channel_flags",
     "dbm_antnoise",
@@ -66,10 +46,42 @@ var availableMetrics = ["antenna",
     "xa"
 ];
 
-function settings(field) {
-    if (field_settings.hasOwnProperty(field))
-        return field_settings[field];
-    return field_settings['default'];
+var selectableMetrics = [
+    "seq",
+    "mcs",
+    "spatialstreams",
+    "bw",
+    "rate",
+    "retry",
+    "type",
+    "typestr",
+    "dbm_antsignal",
+    "dbm_antnoise",
+    "bad"
+];
+
+var field_settings = {
+    'pcap_secs': {
+        'parser': parseFloat,
+        'scale_type': 'linear',
+    },
+    'seq': {
+        'parser': Number,
+        'scale_type': 'linear',
+    },
+    'rate': {
+        'parser': Number,
+        'scale_type': 'log',
+    }
+}
+
+for (var i in selectableMetrics) {
+    if (!field_settings[selectableMetrics[i]]) {
+        field_settings[selectableMetrics[i]] = {
+            'parser': parseFloat,
+            'scale_type': 'linear'
+        }
+    }
 }
 
 var to_plot = []; // fields to be plotted against X axis (time)
@@ -86,20 +98,17 @@ var stream2packetsArray = [];
 // When not null, crosshairs will focus only on packets for this stream.
 var selected_stream = null; // one of the key-value pairs of stream2packets
 
-// input json file found at URL + '/json/' + get_query_param('key')[0]
-try {
-    $.getJSON('/json/' + get_query_param('key')[0], function(json) {
-        var begin = new Date().getTime();
+d3.json('/json/' + get_query_param('key')[0], function(error, json) {
+    if (error) return console.error('error');
 
-        init(JSON.stringify(json));
-        draw();
+    var begin = new Date().getTime();
 
-        var end = new Date().getTime();
-        log('Spent on visualization ' + ((end - begin) / 1000) + ' sec.');
-    });
-} catch (error) {
-    console.log(error);
-}
+    init(json);
+    draw();
+
+    var end = new Date().getTime();
+    log('Spent on visualization ' + ((end - begin) / 1000) + ' sec.');
+})
 
 function get_query_param(param) {
     var urlKeyValuePairs = {}
@@ -139,24 +148,20 @@ function complement_stream_id(key) {
     return z[3] + "_" + z[1]
 }
 
-function init(json_string) {
+function init(json) {
     // TODO(katepek): Should sanitize here? E.g., discard bad packets?
     // Packets w/o seq?
-    var js_objects = JSON.parse(json_string);
-    dataset = JSON.parse(js_objects['js_packets']);
-
-    streams = JSON.parse(js_objects['js_streams']);
+    dataset = JSON.parse(json.js_packets);
+    streams = JSON.parse(json.js_streams);
 
     to_plot = get_query_param('to_plot');
 
     // Leave only packets that have all the fields that we want to plot
-    // and the values there are positive
     sanitize_dataset();
 
     dataset.sort(function(x, y) {
-        return raw('pcap_secs')(x) - raw('pcap_secs')(y);
+        return x['pcap_secs'] - y['pcap_secs'];
     });
-
 
     dataset.forEach(function(d) {
         var streamId = to_stream_key(d);
@@ -173,7 +178,6 @@ function init(json_string) {
     stream2packetsArray.sort(function(a, b) {
         return stream2packetsDict[b].values.length - stream2packetsDict[a].values.length
     })
-
 
     // TODO(katepek): Recalculate and redraw when resized
     height = (total_height - 3 * to_plot.length * padding) / to_plot.length;
@@ -195,10 +199,10 @@ function init(json_string) {
 function sanitize_dataset() {
     log('Before filtering: ' + dataset.length);
     dataset = dataset.filter(function(d) {
-        if (!d.hasOwnProperty('pcap_secs')) return false;
-        if (raw('pcap_secs')(d) <= 0) return false;
+        if (!d['pcap_secs']) return false;
+        if (d['pcap_secs'] <= 0) return false;
 
-        if (!d.hasOwnProperty('ta') || !d.hasOwnProperty('ra'))
+        if (!d['ta'] || !d['ra'])
             return false;
 
         for (var idx in to_plot) {
@@ -210,22 +214,20 @@ function sanitize_dataset() {
 }
 
 function add_scale(field, range) {
-    scales[field] = d3.scale[settings(field)['scale_type']]()
-        .domain([d3.min(dataset, raw(field)),
-            d3.max(dataset, raw(field))
+    scales[field] = d3.scale[field_settings[field]['scale_type']]()
+        .domain([d3.min(dataset, function(d) {
+                return d[field]
+            }),
+            d3.max(dataset, function(d) {
+                return d[field]
+            })
         ])
         .range(range);
 }
 
-function raw(name) {
-    return function(d) {
-        return settings(name)['parser'](d[name]);
-    }
-}
-
 function scaled(name) {
     return function(d) {
-        return scales[name](settings(name)['parser'](d[name]));
+        return scales[name](d[name]);
     }
 }
 
@@ -440,7 +442,9 @@ function visualize(field) {
 }
 
 function binary_search_by(field) {
-    return d3.bisector(raw(field)).left;
+    return d3.bisector(function(d) {
+        return d[field]
+    }).left;
 }
 
 function find_packet(x, y, field) {
@@ -452,7 +456,6 @@ function find_packet(x, y, field) {
     var pcap_secs = scales['pcap_secs'].invert(x);
     var search_in = dataset;
 
-    // this mouseover to a particular stream - will maintain functionality for now
     if (selected_stream) {
         search_in = stream2packetsDict[selected_stream].values;
     }
