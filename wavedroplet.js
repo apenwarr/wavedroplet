@@ -338,19 +338,17 @@ function visualize(field) {
     stream2packetsArray.forEach(function(d, i) {
         var current_plot_id = 'pcap_vs_' + field + '_' + d;
 
-        svg
-            .selectAll(current_plot_id)
+        svg.append('g').attr("class", current_plot_id).attr("fill", 'grey')
+            .selectAll('.points')
             .data(stream2packetsDict[d].values)
             .enter()
             .append('circle')
-            .attr('class', 'points ' + current_plot_id)
+            .attr('class', 'points')
             .attr('cx', scaled('pcap_secs'))
             .attr('cy', scaled(field))
-            .attr('fill', 'grey')
             .attr('r', 2);
     });
 
-    // TODO(katepek): Axes seem to show range, not the domain
     var pcapSecsAxis = d3.svg.axis()
         .scale(scales['pcap_secs'])
         .tickFormat(hourMinuteMilliseconds)
@@ -543,25 +541,25 @@ function draw_crosshairs(d, field) {
 }
 
 function select_stream(streamId) {
-    // unselect all legends
-    d3.selectAll(".legend").classed("selected selectedComplement", false);
-    // unselect all points
-    d3.selectAll(".points").attr("fill", "grey")
 
     // if new stream selected, update view & selected stream
     if (!selected_stream || streamId != selected_stream) {
         // select current legend
-        d3.select('.legend_' + streamId).classed("selected", true);
-        d3.select('.legend_' + complement_stream_id(streamId)).classed("selectedComplement", true);
+        d3.select('.legend_' + streamId).classed("selected", true).classed("selectedComplement", false);
+        d3.select('.legend_' + complement_stream_id(streamId)).classed("selectedComplement", true).classed("selected", false);
         // select these points
         for (var idx in to_plot) {
-            d3.selectAll('.pcap_vs_' + to_plot[idx] + '_' + streamId).attr("fill", "orange")
-            d3.selectAll('.pcap_vs_' + to_plot[idx] + '_' + complement_stream_id(streamId)).attr("fill", "#0D6AEB")
+            d3.selectAll('.pcap_vs_' + to_plot[idx] + '_' + streamId).classed("selected", true).classed("selectedComplement", false);
+            d3.selectAll('.pcap_vs_' + to_plot[idx] + '_' + complement_stream_id(streamId))
+                .classed("selectedComplement", true)
+                .classed("selected", false);
         }
 
         selected_stream = streamId;
         butter_bar('Locked to: ' + streamId)
     } else {
+        d3.selectAll(".selected").classed("selected", false);
+        d3.selectAll(".selectedComplement").classed("selectedComplement", false);
         selected_stream = null;
         butter_bar('Unlocked')
     }
