@@ -193,6 +193,10 @@ function init(json) {
     to_plot.forEach(function(d) {
         add_scale(d, y_range)
     });
+    // add scale for legend, based on pcap_secs scale
+    scales['pcap_secs_fixed'] = d3.scale.linear().domain(scales['pcap_secs'].domain()).range(scales['pcap_secs'].domain());
+
+
 }
 
 
@@ -283,7 +287,7 @@ function add_legend() {
             var col = i % n_cols;
             var row = Math.floor(i / n_cols);
             svg.append('text')
-                .attr('class', 'legend legend_' + streamId)
+                .attr('class', 'legend stream_' + streamId)
                 .attr('x', col * total_length + 2 * padding)
                 .attr('y', (row + 1.5) * padding)
                 .text(streamId)
@@ -338,9 +342,9 @@ function visualize(field) {
     reticle[field] = focus;
 
     stream2packetsArray.forEach(function(d, i) {
-        var current_plot_id = 'pcap_vs_' + field + '_' + d;
+        //var current_plot_id = 'pcap_vs_' + field + '_' + d;
 
-        svg.append('g').attr("class", current_plot_id).attr("fill", 'grey')
+        svg.append('g').attr("class", 'pcap_vs_' + field + " stream_" + d).attr("fill", 'grey')
             .selectAll('.points')
             .data(stream2packetsDict[d].values)
             .enter()
@@ -431,6 +435,7 @@ function visualize(field) {
         .on('click', function() {
             d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], field);
             if (!d) return;
+            console.log(d)
             select_stream(to_stream_key(d));
             draw_crosshairs(d, field);
         })
@@ -545,20 +550,23 @@ function select_stream(streamId) {
 
     // if new stream selected, update view & selected stream
     if (!selected_stream || streamId != selected_stream) {
-        // select current legend
-        d3.select('.legend_' + streamId).classed("selected", true).classed("selectedComplement", false);
-        d3.select('.legend_' + complement_stream_id(streamId)).classed("selectedComplement", true).classed("selected", false);
+
+        // need to clear because from the legend the user can click on another stream even when a stream is "locked"
+        // which is not possible from the points since you can only mouseover your selected_stream
+        d3.selectAll(".legend").classed("selected", false).classed("selectedComplement", false)
+        to_plot.forEach(function(d) {
+            d3.selectAll(".pcap_secs_vs" + to_plot).classed("selected", false).classed("selectedComplement", false)
+        })
+
         // select these points
-        for (var idx in to_plot) {
 
-            d3.selectAll('.pcap_vs_' + to_plot[idx] + '_' + streamId)
-                .classed("selected", true)
-                .classed("selectedComplement", false);
+        d3.selectAll('.stream_' + streamId)
+            .classed("selected", true)
+            .classed("selectedComplement", false);
 
-            d3.selectAll('.pcap_vs_' + to_plot[idx] + '_' + complement_stream_id(streamId))
-                .classed("selectedComplement", true)
-                .classed("selected", false);
-        }
+        d3.selectAll('.stream_' + complement_stream_id(streamId))
+            .classed("selectedComplement", true)
+            .classed("selected", false);
 
         selected_stream = streamId;
         butter_bar('Locked to: ' + streamId)
