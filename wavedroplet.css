@@ -69,3 +69,14 @@
     .hidden {
       display: none;
     }
+
+    .brush .extent {
+      stroke: #fff;
+      fill-opacity: .125;
+      shape-rendering: crispEdges;  
+    }
+
+    .histBar {
+      fill: #141414;
+      stroke: none;
+    }

@@ -87,6 +87,11 @@ for (var i in selectableMetrics) {
 var to_plot = []; // fields to be plotted against X axis (time)
 var scales = {}; // dict[field; scale], incl. X axis
 var reticle = {}; // dict[field; crosshair]
+var histogramPacketNum = [] // array to be used to create overview histogram
+var pcapSecsAxis = d3.svg.axis()
+    .tickFormat(hourMinuteMilliseconds)
+    .orient('bottom')
+    .ticks(5);
 
 var dataset; // all packets, sorted by pcap_secs
 var streams; // streams: pairs of (transmitter, receiver)
@@ -179,10 +184,15 @@ function init(json) {
         add_scale(d, y_range)
     });
     // add scale for legend, based on pcap_secs scale
-    scales['pcap_secs_fixed'] = d3.scale.linear().domain(scales['pcap_secs'].domain()).range(scales['pcap_secs'].domain());
+    scales['pcap_secs_fixed'] = d3.scale.linear().domain(scales['pcap_secs'].domain()).range(scales['pcap_secs'].range());
 
+    pcapSecsAxis.scale(scales['pcap_secs']);
+
+    // get array of all packetSecs and use a histogram 
+    var packetSecs = []
 
     dataset.forEach(function(d) {
+        packetSecs.push(d.pcap_secs)
         var streamId = to_stream_key(d);
         if (!stream2packetsDict[streamId]) {
             stream2packetsDict[streamId] = {
@@ -193,6 +203,11 @@ function init(json) {
             stream2packetsDict[streamId].values.push(d);
         }
     })
+
+    // set up histogram for number of packets per ~.1 seconds
+    var binNum = (scales['pcap_secs_fixed'].domain()[1] - scales['pcap_secs_fixed'].domain()[0]) * 10;
+    histogramPacketNum = d3.layout.histogram().bins(binNum)(packetSecs);
+
 
     stream2packetsArray.sort(function(a, b) {
         return stream2packetsDict[b].values.length - stream2packetsDict[a].values.length
@@ -239,11 +254,89 @@ function scaled(name) {
 function draw() {
     add_butter_bar();
 
+    add_histOverview();
+
     to_plot.forEach(function(d) {
         visualize(d)
     })
 
     add_legend();
+}
+
+function add_histOverview() {
+    var histHeight = 80;
+    var max = 0;
+    histogramPacketNum.forEach(function(d) {
+        if (d.y > max) {
+            max = d.y;
+        }
+    })
+    scales["packetNumPerTenth"] = d3.scale.linear().domain([0, max]).range([histHeight, 0])
+
+
+    var overviewYaxis = d3.svg.axis()
+        .scale(scales['packetNumPerTenth'])
+        .orient('right')
+        .ticks(3);
+
+    var overviewXaxis = d3.svg.axis()
+        .scale(scales['pcap_secs_fixed'])
+        .tickFormat(hourMinuteMilliseconds)
+        .orient('bottom')
+        .ticks(5);
+
+    var svg = d3
+        .select('body')
+        .append('svg')
+        .attr('id', 'histogramZoomNav')
+        .attr('width', width)
+        .attr('height', histHeight + 20);
+
+    // append x-axis
+    svg.append('g')
+        .attr('class', 'axis x overview')
+        .attr('transform', 'translate(0,' + histHeight + ')')
+        .call(overviewXaxis);
+
+    svg.append('g')
+        .attr('class', 'axis y overview')
+        .attr('transform', 'translate(' + (width - 3 * padding) + ', 0)')
+        .call(overviewYaxis);
+
+    svg.selectAll(".histBar")
+        .data(histogramPacketNum)
+        .enter().append("rect")
+        .attr("class", "histBar")
+        .attr("x", function(d) {
+            return scales['pcap_secs_fixed'](d.x)
+        })
+        .attr("y", function(d) {
+            return scales["packetNumPerTenth"](d.y);
+        })
+        .attr("width", function(d) {
+            return scales['pcap_secs_fixed'](d.x + d.dx) - scales['pcap_secs_fixed'](d.x)
+        })
+        .attr("height", function(d) {
+            return histHeight - scales["packetNumPerTenth"](d.y)
+        });
+
+    var brush = d3.svg.brush()
+        .x(scales['pcap_secs_fixed'])
+        .on("brush", brushed);
+
+    svg.append("g")
+        .attr("class", "x brush")
+        .call(brush)
+        .selectAll("rect")
+        .attr("y", -6)
+        .attr("height", histHeight + 7);
+
+    // on brush, zoom/pan rest of charts
+    function brushed() {
+        scales['pcap_secs'].domain(brush.empty() ? scales['pcap_secs_fixed'].domain() : brush.extent());
+        d3.selectAll(".axis.x.metric").call(pcapSecsAxis);
+        d3.selectAll(".points").attr('cx', scaled('pcap_secs'))
+    }
 }
 
 function add_butter_bar() {
@@ -343,9 +436,8 @@ function visualize(field) {
     reticle[field] = focus;
 
     stream2packetsArray.forEach(function(d, i) {
-        //var current_plot_id = 'pcap_vs_' + field + '_' + d;
 
-        svg.append('g').attr("class", 'pcap_vs_' + field + " stream_" + d).attr("fill", 'grey')
+        svg.append('g').attr("class", 'pcap_vs_' + field + " stream_" + d + " metricChart").attr("fill", 'grey')
             .selectAll('.points')
             .data(stream2packetsDict[d].values)
             .enter()
@@ -356,29 +448,13 @@ function visualize(field) {
             .attr('r', 2);
     });
 
-    var pcapSecsAxis = d3.svg.axis()
-        .scale(scales['pcap_secs'])
-        .tickFormat(hourMinuteMilliseconds)
-        .orient('bottom')
-        .ticks(5);
-
     var yAxis = d3.svg.axis()
         .scale(scales[field])
         .orient('right')
         .ticks(5);
 
-
-    // set up zoom
-    var zoom = d3.behavior.zoom().x(scales['pcap_secs']).on("zoom", showZoom);
-
-    function showZoom(d) {
-            d3.selectAll(".axis.x").call(pcapSecsAxis);
-            d3.selectAll(".points").attr('cx', scaled('pcap_secs'))
-        }
-        // end zooming
-
     svg.append('g')
-        .attr('class', 'axis x')
+        .attr('class', 'axis x metric')
         .attr('transform', 'translate(0,' + (height - 1.5 * padding) + ')')
         .call(pcapSecsAxis);
     svg.append('g')
@@ -413,7 +489,6 @@ function visualize(field) {
         .attr("class", "plotRect")
         .style('fill', 'none')
         .style('pointer-events', 'all')
-        .call(zoom)
         .on('mouseover', function() {
             for (var i in Object.keys(reticle)) {
                 var current = reticle[Object.keys(reticle)[i]];
@@ -436,7 +511,6 @@ function visualize(field) {
         .on('click', function() {
             d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], field);
             if (!d) return;
-            console.log(d)
             select_stream(to_stream_key(d));
             draw_crosshairs(d, field);
         })
