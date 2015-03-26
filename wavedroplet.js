@@ -163,21 +163,6 @@ function init(json) {
         return x['pcap_secs'] - y['pcap_secs'];
     });
 
-    dataset.forEach(function(d) {
-        var streamId = to_stream_key(d);
-        if (!stream2packetsDict[streamId]) {
-            stream2packetsDict[streamId] = {
-                values: [d]
-            };
-            stream2packetsArray.push(streamId);
-        } else {
-            stream2packetsDict[streamId].values.push(d);
-        }
-    })
-
-    stream2packetsArray.sort(function(a, b) {
-        return stream2packetsDict[b].values.length - stream2packetsDict[a].values.length
-    })
 
     // TODO(katepek): Recalculate and redraw when resized
     height = (total_height - 3 * to_plot.length * padding) / to_plot.length;
@@ -196,6 +181,22 @@ function init(json) {
     // add scale for legend, based on pcap_secs scale
     scales['pcap_secs_fixed'] = d3.scale.linear().domain(scales['pcap_secs'].domain()).range(scales['pcap_secs'].domain());
 
+
+    dataset.forEach(function(d) {
+        var streamId = to_stream_key(d);
+        if (!stream2packetsDict[streamId]) {
+            stream2packetsDict[streamId] = {
+                values: [d]
+            };
+            stream2packetsArray.push(streamId);
+        } else {
+            stream2packetsDict[streamId].values.push(d);
+        }
+    })
+
+    stream2packetsArray.sort(function(a, b) {
+        return stream2packetsDict[b].values.length - stream2packetsDict[a].values.length
+    })
 
 }
 
@@ -559,7 +560,6 @@ function select_stream(streamId) {
         })
 
         // select these points
-
         d3.selectAll('.stream_' + streamId)
             .classed("selected", true)
             .classed("selectedComplement", false);
