@@ -454,44 +454,10 @@ function visualize(field) {
     draw_crosshairs(reticle[field]);
 
     // append the rectangle to capture mouse movements
-    svg.append('rect')
-        .attr('width', width)
-        .attr('height', height)
-        .attr("class", "plotRect")
-        .style('fill', 'none')
-        .style('pointer-events', 'all')
-        .on('mouseover', function() {
-            for (var i in Object.keys(reticle)) {
-                var current = reticle[Object.keys(reticle)[i]];
-                current.style('display', null);
-                current.select('.y').style('display', null);
-                current.select('circle.y').style('display', null);
-                current.select('text.y1').style('display', null);
-            }
-        })
-        .on('mouseout', function() {
-            var x = d3.mouse(this)[0];
-            if (x < scales['pcap_secs'].range()[0] ||
-                x > scales['pcap_secs'].range()[1]) {
-                d3.select('#tooltip').classed("hidden", true)
-                for (var i in Object.keys(reticle)) {
-                    reticle[Object.keys(reticle)[i]].style('display', 'none');
-                }
-            }
-        })
-        .on('click', function() {
-            d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], field);
-            if (!d) return;
-            select_stream(to_stream_key(d));
-            update_crosshairs(d, field);
-        })
-        .on('mousemove', function() {
-            d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], field);
-            if (!d) return;
-            update_crosshairs(d, field);
-        });
+    draw_hidden_rect_for_mouseover(svg, field)
 }
 
+// visualization set up functions
 function draw_points_per_stream(fieldName, streamId, packetsDictionary, svg) {
     svg.append('g').attr("class", 'pcap_vs_' + fieldName + " stream_" + streamId + " metricChart").attr("fill", 'grey')
         .selectAll('.points')
@@ -519,6 +485,59 @@ function draw_metric_axes(svg, fieldName) {
         .attr('transform', 'translate(' + (width - 3 * padding) + ',0)')
         .call(yAxis);
 }
+
+function draw_hidden_rect_for_mouseover(svg, fieldName) {
+    svg.append('rect')
+        .attr('width', width)
+        .attr('height', height)
+        .attr("class", "plotRect")
+        .style('fill', 'none')
+        .style('pointer-events', 'all')
+        .on('mouseover', function() {
+            d3.selectAll(".focus").classed("hidden", false)
+        })
+        .on('mouseout', function() {
+            var x = d3.mouse(this)[0];
+            if (x < scales['pcap_secs'].range()[0] ||
+                x > scales['pcap_secs'].range()[1]) {
+                d3.select('#tooltip').classed("hidden", true)
+                d3.selectAll(".focus").classed("hidden", true)
+            }
+        })
+        .on('click', function() {
+            d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], fieldName);
+            if (!d) return;
+            select_stream(to_stream_key(d));
+            update_crosshairs(d, fieldName);
+        })
+        .on('mousemove', function() {
+            d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], fieldName);
+            if (!d) return;
+            update_crosshairs(d, fieldName);
+        });
+}
+
+function draw_crosshairs(element) {
+    element.append('line')
+        .attr('class', 'x')
+        .attr('y1', 0)
+        .attr('y2', height);
+
+    element.append('line')
+        .attr('class', 'y')
+        .attr('x1', 0)
+        .attr('x2', width);
+
+    element.append('circle')
+        .attr('class', 'y')
+        .attr('r', 7);
+
+    element.append('text')
+        .attr('class', 'y1')
+        .attr('dx', 8)
+        .attr('dy', '-.5em');
+}
+
 
 function binary_search_by(field) {
     return d3.bisector(function(d) {
@@ -579,27 +598,6 @@ function closest_to_y(search_in, idx, x, y, scaled_y, field) {
     }
 
     return search_in[closest_idx];
-}
-
-function draw_crosshairs(element) {
-    element.append('line')
-        .attr('class', 'x')
-        .attr('y1', 0)
-        .attr('y2', height);
-
-    element.append('line')
-        .attr('class', 'y')
-        .attr('x1', 0)
-        .attr('x2', width);
-
-    element.append('circle')
-        .attr('class', 'y')
-        .attr('r', 7);
-
-    element.append('text')
-        .attr('class', 'y1')
-        .attr('dx', 8)
-        .attr('dy', '-.5em');
 }
 
 function update_crosshairs(d, field) {
