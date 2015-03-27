@@ -411,7 +411,6 @@ function butter_bar(text) {
         .style('opacity', 0);
 }
 
-
 var details = d3.select('#tooltip')
     .style('top', (2 * padding) + 'px')
     .classed('hidden', true)
@@ -419,68 +418,40 @@ var details = d3.select('#tooltip')
     .attr("width", 200)
     .attr("height", availableMetrics.length * tooltipLabelsHeight);
 
+details.selectAll('.tooltipValues')
+    .data(availableMetrics)
+    .enter()
+    .append("text")
+    .attr("class", "tooltipValues")
+    .attr("y", function(k, i) {
+        return i * tooltipLabelsHeight + 10
+    });
+
 function visualize(field) {
     log('About to visualize ' + field);
 
-    var svg = d3
-        .select('body')
+    // set up main svg for plot
+    var svg = d3.select('body')
         .append('svg')
         .attr('class', 'plot_' + field)
         .attr('width', width)
         .attr('height', height);
 
-    var focus = svg.append('g')
+    // set up crosshairs element
+    reticle[field] = svg.append('g')
         .attr("class", "focus")
         .style('display', null);
 
-    reticle[field] = focus;
-
-    stream2packetsArray.forEach(function(d, i) {
-
-        svg.append('g').attr("class", 'pcap_vs_' + field + " stream_" + d + " metricChart").attr("fill", 'grey')
-            .selectAll('.points')
-            .data(stream2packetsDict[d].values)
-            .enter()
-            .append('circle')
-            .attr('class', 'points')
-            .attr('cx', scaled('pcap_secs'))
-            .attr('cy', scaled(field))
-            .attr('r', 2);
+    // draw points
+    stream2packetsArray.forEach(function(d) {
+        draw_points_per_stream(field, d, stream2packetsDict, svg)
     });
 
-    var yAxis = d3.svg.axis()
-        .scale(scales[field])
-        .orient('right')
-        .ticks(5);
-
-    svg.append('g')
-        .attr('class', 'axis x metric')
-        .attr('transform', 'translate(0,' + (height - 1.5 * padding) + ')')
-        .call(pcapSecsAxis);
-    svg.append('g')
-        .attr('class', 'axis y')
-        .attr('transform', 'translate(' + (width - 3 * padding) + ',0)')
-        .call(yAxis);
+    // x and y axis
+    draw_metric_axes(svg, field);
 
     // Add crosshairs
-    focus.append('line')
-        .attr('class', 'x')
-        .attr('y1', 0)
-        .attr('y2', height);
-
-    focus.append('line')
-        .attr('class', 'y')
-        .attr('x1', 0)
-        .attr('x2', width);
-
-    focus.append('circle')
-        .attr('class', 'y')
-        .attr('r', 7);
-
-    focus.append('text')
-        .attr('class', 'y1')
-        .attr('dx', 8)
-        .attr('dy', '-.5em');
+    draw_crosshairs(reticle[field]);
 
     // append the rectangle to capture mouse movements
     svg.append('rect')
@@ -512,13 +483,41 @@ function visualize(field) {
             d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], field);
             if (!d) return;
             select_stream(to_stream_key(d));
-            draw_crosshairs(d, field);
+            update_crosshairs(d, field);
         })
         .on('mousemove', function() {
             d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], field);
             if (!d) return;
-            draw_crosshairs(d, field);
+            update_crosshairs(d, field);
         });
+}
+
+function draw_points_per_stream(fieldName, streamId, packetsDictionary, svg) {
+    svg.append('g').attr("class", 'pcap_vs_' + fieldName + " stream_" + streamId + " metricChart").attr("fill", 'grey')
+        .selectAll('.points')
+        .data(packetsDictionary[streamId].values)
+        .enter()
+        .append('circle')
+        .attr('class', 'points')
+        .attr('cx', scaled('pcap_secs'))
+        .attr('cy', scaled(fieldName))
+        .attr('r', 2);
+}
+
+function draw_metric_axes(svg, fieldName) {
+    var yAxis = d3.svg.axis()
+        .scale(scales[fieldName])
+        .orient('right')
+        .ticks(5);
+
+    svg.append('g')
+        .attr('class', 'axis x metric')
+        .attr('transform', 'translate(0,' + (height - 1.5 * padding) + ')')
+        .call(pcapSecsAxis);
+    svg.append('g')
+        .attr('class', 'axis y')
+        .attr('transform', 'translate(' + (width - 3 * padding) + ',0)')
+        .call(yAxis);
 }
 
 function binary_search_by(field) {
@@ -582,7 +581,28 @@ function closest_to_y(search_in, idx, x, y, scaled_y, field) {
     return search_in[closest_idx];
 }
 
-function draw_crosshairs(d, field) {
+function draw_crosshairs(element) {
+    element.append('line')
+        .attr('class', 'x')
+        .attr('y1', 0)
+        .attr('y2', height);
+
+    element.append('line')
+        .attr('class', 'y')
+        .attr('x1', 0)
+        .attr('x2', width);
+
+    element.append('circle')
+        .attr('class', 'y')
+        .attr('r', 7);
+
+    element.append('text')
+        .attr('class', 'y1')
+        .attr('dx', 8)
+        .attr('dy', '-.5em');
+}
+
+function update_crosshairs(d, field) {
     var detailedInfo = d;
 
     for (var r_field in reticle) {
@@ -599,26 +619,17 @@ function draw_crosshairs(d, field) {
                 'translate(' + closest_x + ',' + closest_y + ')');
     }
 
+    updateAndShowTooltip(detailedInfo);
+}
+
+function updateAndShowTooltip(data) {
     d3.select('#tooltip')
-        .classed('hidden', false).select("svg")
-        .selectAll('.tooltipValues')
-        .data(availableMetrics)
-        .enter()
-        .append("text")
-        .attr("class", "tooltipValues")
-        .attr("y", function(k, i) {
-            return i * tooltipLabelsHeight + 10
-        })
-        .text(function(k) {
-            return k + ": " + detailedInfo[availableMetrics]
-        });
-
-    d3.selectAll(".tooltipValues")
+        .classed('hidden', false)
+        .selectAll(".tooltipValues")
         .data(availableMetrics)
         .text(function(k) {
-            return k + ": " + detailedInfo[k]
+            return k + ": " + data[k]
         });
-
 }
 
 function select_stream(streamId) {
@@ -629,6 +640,7 @@ function select_stream(streamId) {
         // need to clear because from the legend the user can click on another stream even when a stream is "locked"
         // which is not possible from the points since you can only mouseover your selected_stream
         d3.selectAll(".legend").classed("selected", false).classed("selectedComplement", false)
+
         to_plot.forEach(function(d) {
             d3.selectAll(".pcap_secs_vs" + to_plot).classed("selected", false).classed("selectedComplement", false)
         })
