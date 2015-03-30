@@ -214,6 +214,14 @@ function init(json) {
     var binNum = (state.scales['pcap_secs_fixed'].domain()[1] - state.scales['pcap_secs_fixed'].domain()[0]) * 10;
     histogramPacketNum = d3.layout.histogram().bins(binNum)(packetSecs);
 
+    // construct array to keep track of bin edges relative to dataset slices to aid in adding/removing points
+    var dataSliceTracker = [];
+    var count = 0;
+    histogramPacketNum.forEach(function(d, i) {
+        dataSliceTracker.push(count)
+        count = count + d.y;
+    })
+
     // sort streams by number of packets per stream
     stream2packetsArray.sort(function(a, b) {
         return stream2packetsDict[b].values.length - stream2packetsDict[a].values.length
@@ -272,6 +280,8 @@ function draw() {
 function add_overview() {
     var histHeight = 80;
     var max = 0;
+
+    // find max bar height and use to set Y axis for overview chart
     histogramPacketNum.forEach(function(d) {
         if (d.y > max) {
             max = d.y;
@@ -279,6 +289,7 @@ function add_overview() {
     })
     state.scales["packetNumPerTenth"] = d3.scale.linear().domain([0, max]).range([histHeight, 0])
 
+    // set up axis
     var overviewYaxis = d3.svg.axis()
         .scale(state.scales['packetNumPerTenth'])
         .orient('right')
@@ -290,6 +301,7 @@ function add_overview() {
         .orient('bottom')
         .ticks(5);
 
+    // start building the chart
     var svg = d3
         .select('body')
         .append('svg')
@@ -309,6 +321,7 @@ function add_overview() {
         .call(overviewYaxis);
 
     // draw bars
+    console.log(histogramPacketNum)
     svg.selectAll(".histBar")
         .data(histogramPacketNum)
         .enter().append("rect")
