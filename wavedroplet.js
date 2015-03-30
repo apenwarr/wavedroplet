@@ -210,9 +210,8 @@ function init(json) {
         }
     })
 
-    // set up histogram for number of packets per ~.1 seconds
-    var binNum = (state.scales['pcap_secs_fixed'].domain()[1] - state.scales['pcap_secs_fixed'].domain()[0]) * 10;
-    histogramPacketNum = d3.layout.histogram().bins(binNum)(packetSecs);
+    // set up histogram with 1000 bins
+    histogramPacketNum = d3.layout.histogram().bins(1000)(packetSecs);
 
     // construct array to keep track of bin edges relative to dataset slices to aid in adding/removing points
     var dataSliceTracker = [];
