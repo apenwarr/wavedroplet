@@ -5,6 +5,12 @@ api_version: 1
 threadsafe: true
 
 handlers:
+- url: /wavedroplet.css
+  static_files: wavedroplet.css
+  upload: wavedroplet.css
+- url: /wavedroplet.js
+  static_files: wavedroplet.js
+  upload: wavedroplet.js
 - url: /d3viz.html(.*)
   static_files: d3viz.html
   upload: d3viz.html

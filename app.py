@@ -292,9 +292,10 @@ class JsonHandler(_BaseHandler):
     pcapdata = PcapData.GetOrInsertFromBlob(blob_info)
 
     self.response.headers['Content-Type'] = 'application/json'
+    # include in js_bundle any content to be included in json being passed to index.html
     js_bundle = {
         'js_packets': pcapdata.js_packets,
-        'js_streams': pcapdata.js_streams,
+        'js_streams': pcapdata.js_streams
     }
     self.response.out.write(json.dumps(js_bundle))
 
