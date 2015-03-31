@@ -133,7 +133,7 @@ function to_stream_key(d) {
     return d['ta'].replace(/:/g, '') + '_' + d['ra'].replace(/:/g, '');
 }
 
-// there must be a beter way... 
+// there must be a beter way...
 function from_stream_key(key) {
     var z = key.split('_')
     var ta = z[0].slice(0, 2) + ':' + z[0].slice(2, 4) +
@@ -191,7 +191,7 @@ function init(json) {
 
     pcapSecsAxis.scale(state.scales['pcap_secs']);
 
-    // get array of all packetSecs and use a histogram 
+    // get array of all packetSecs and use a histogram
     var packetSecs = []
 
     dataset.forEach(function(d) {
