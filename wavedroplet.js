@@ -23,29 +23,22 @@ var dim = {
 }
 var tooltipLabelsHeight = 15; // height per line in detailed mouseover view
 
-var availableMetrics = ["antenna",
-    "channel_flags",
+var availableMetrics = [
+    "pcap_secs",
+    "mac_usecs",
+    "ta",
+    "ra",
+    "typestr",
+    "seq",
+    "rate",
+    "antenna",
     "dbm_antnoise",
     "dbm_antsignal",
     "dsmode",
     "duration",
-    "flags",
-    "frag",
-    "freq",
-    "incl_len",
-    "mac_usecs",
-    "order",
     "orig_len",
-    "pcap_secs",
     "powerman",
-    "ta",
-    "type",
-    "typestr",
-    "ra",
-    "rate",
     "retry",
-    "seq",
-    "xa"
 ];
 
 var selectableMetrics = [
@@ -57,6 +50,7 @@ var selectableMetrics = [
     "retry",
     "type",
     "typestr",
+    "dsmode",
     "dbm_antsignal",
     "dbm_antnoise",
     "bad"
@@ -109,7 +103,7 @@ var stream2packetsArray = [];
 
 // get data & visualize
 d3.json('/json/' + get_query_param('key')[0], function(error, json) {
-    if (error) return console.error('error');
+    if (error) return console.error('error', error);
 
     var begin = new Date().getTime();
 
@@ -161,7 +155,7 @@ function complement_stream_id(key) {
 function init(json) {
     // TODO(katepek): Should sanitize here? E.g., discard bad packets?
     // Packets w/o seq?
-    dataset = JSON.parse(json.js_packets);
+    dataset = json.js_packets;
 
     state.to_plot = get_query_param('to_plot');
 
