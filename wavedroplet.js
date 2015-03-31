@@ -22,6 +22,7 @@ var dim = {
     padding: 20
 }
 var tooltipLabelsHeight = 15; // height per line in detailed mouseover view
+var number_of_packets;
 
 var availableMetrics = ["antenna",
     "channel_flags",
@@ -211,6 +212,7 @@ function init(json) {
     })
 
     // set up histogram with 1000 bins
+    number_of_packets = packetSecs.length;
     histogramPacketNum = d3.layout.histogram().bins(1000)(packetSecs);
 
     // construct array to keep track of bin edges relative to dataset slices to aid in adding/removing points
@@ -320,7 +322,6 @@ function add_overview() {
         .call(overviewYaxis);
 
     // draw bars
-    console.log(histogramPacketNum)
     svg.selectAll(".histBar")
         .data(histogramPacketNum)
         .enter().append("rect")
@@ -395,8 +396,8 @@ function add_legend() {
     for (var i in stream2packetsArray) {
         var streamId = stream2packetsArray[i];
         var count = stream2packetsDict[streamId].values.length;
-        // only show on legend if more than 50 packets belong to this stream
-        if (count > 50) {
+        // only show on legend if more than 1% belong to this stream
+        if (count > number_of_packets * .01) {
             var col = i % n_cols;
             var row = Math.floor(i / n_cols);
             svg.append('text')
