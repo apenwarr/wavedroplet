@@ -74,7 +74,7 @@ var field_settings = {
     },
     'rate': {
         'parser': Number,
-        'scale_type': 'log',
+        'scale_type': 'linear',
     }
 }
 
