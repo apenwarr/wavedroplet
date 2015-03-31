@@ -105,6 +105,9 @@ var stream2packetsDict = {};
 var stream2packetsArray = [];
 
 
+// update title
+document.getElementById("title").innerHTML = get_query_param('filename');
+
 // get data & visualize
 d3.json('/json/' + get_query_param('key')[0], function(error, json) {
     if (error) return console.error('error', error);

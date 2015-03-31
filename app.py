@@ -184,6 +184,8 @@ class ViewHandler(_BaseHandler):
                 if n >= cutoff and b != BROADCAST]
     other = sum((n for n in boxes.itervalues() if n < cutoff))
     aliases = pcapdata.aliases
+    print 'aliases are %s' % str(aliases)
+
     if pcapdata.show_hosts:
       checked = dict((h, 1) for h in pcapdata.show_hosts)
     else:
@@ -242,9 +244,10 @@ class SaveHandler(_BaseHandler):
     capdefault.put()
     pcapdata.put()
 
-    self.redirect('/d3viz.html?key=%s&to_plot=%s'
+    self.redirect('/d3viz.html?key=%s&to_plot=%s&filename=%s'
                   % (_Esc(str(blob_info.key())),
-                     _Esc(','.join(pcapdata.show_fields))))
+                     _Esc(','.join(pcapdata.show_fields)),
+                     _Esc(str(blob_info.filename))))
 
 
 class _CacheMissing(Exception):
