@@ -30,6 +30,7 @@ var number_of_packets;
 var availableMetrics = [
     "pcap_secs",
     "mac_usecs",
+    "streamId",
     "ta",
     "ra",
     "typestr",
