@@ -209,7 +209,7 @@ class ViewHandler(_BaseHandler):
 
 class SaveHandler(_BaseHandler):
 
-  #@GoogleLoginRequired
+  @GoogleLoginRequired
   def post(self, blobres):
     blob_info = blobstore.BlobInfo.get(str(urllib.unquote(blobres)))
     capdefault = PcapData.GetDefault()
@@ -340,7 +340,7 @@ class JsonHandler(_BaseHandler):
 
     jscache = _MaybeCache(blob_info=blob_info, pcapdata=pcapdata,
                           start_time=None, end_time=None)
-
+    jscache['filename'] = str(blob_info.filename)
     jscache["aliases"] = pcapdata.aliases
     self.response.out.write(json.dumps(jscache))
 

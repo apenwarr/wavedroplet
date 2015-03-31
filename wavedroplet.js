@@ -114,6 +114,9 @@ d3.json('/json/' + get_query_param('key')[0], function(error, json) {
 
     var begin = new Date().getTime();
 
+    // update title
+    document.getElementById("title").innerHTML = json.filename;
+
     init(json);
     draw();
 
