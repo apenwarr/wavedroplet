@@ -33,8 +33,10 @@ from google.appengine.ext.webapp import blobstore_handlers
 BROADCAST = 'ff:ff:ff:ff:ff:ff'
 DEFAULT_FIELDS = ['seq', 'rate']
 AVAIL_FIELDS = ['seq', 'mcs', 'spatialstreams', 'bw', 'rate', 'retry',
-                'type', 'typestr', 'dbm_antsignal', 'dbm_antnoise',
+                'type', 'typestr', 'dsmode', 'dbm_antsignal', 'dbm_antnoise',
                 'bad']
+ALL_FIELDS = ['pcap_secs', 'mac_usecs', 'ta', 'ra', 'antenna',
+              'duration', 'orig_len', 'powerman'] + AVAIL_FIELDS
 
 IS_DEBUG = False
 SAMPLE_SIZE = 2
@@ -89,13 +91,6 @@ class PcapData(ndb.Model):
   show_hosts = ndb.StringProperty(repeated=True)
   show_fields = ndb.StringProperty(repeated=True)
   aliases = ndb.PickleProperty()
-
-  # Cached JSON representations for various useful subsets of data
-  # to be passed to the JS side for visualization.
-  # All captured packets
-  js_packets = ndb.JsonProperty(compressed=True)
-  # All pairs of (transmitter, receiver)
-  js_streams = ndb.JsonProperty(compressed=True)
 
   @staticmethod
   def GetDefault():
@@ -168,7 +163,7 @@ def _Boxes(blob_info):
       if 'ta' in p and 'ra' in p:
         boxes[p.ta] += 1
         boxes[p.ra] += 1
-    memcache.add(key=str(blob_info.key()), value=dict(boxes),
+    memcache.set(key=str(blob_info.key()), value=dict(boxes),
                  namespace='boxes')
   return boxes
 
@@ -222,7 +217,7 @@ class SaveHandler(_BaseHandler):
       email = u.email()
     else:
       email = 'anonymous'
-    sys.stderr.write('stupid user:%r email:%r\n' % (u, email))
+    sys.stderr.write('logged-in user:%r email:%r\n' % (u, email))
     pcapdata = PcapData.GetOrInsertFromBlob(blob_info)
     boxes = _Boxes(blob_info)
     pcapdata.show_hosts = []
@@ -241,8 +236,8 @@ class SaveHandler(_BaseHandler):
       if self.request.get('key-%s' % k):
         pcapdata.show_fields.append(k)
 
-    _MaybeCache('on' == self.request.get('update-cache'),
-                blob_info, pcapdata)
+    if 'on' == self.request.get('update-cache'):
+      memcache.delete(str(blob_info.key()), namespace='jsindex')
 
     capdefault.put()
     pcapdata.put()
@@ -252,36 +247,83 @@ class SaveHandler(_BaseHandler):
                      _Esc(','.join(pcapdata.show_fields))))
 
 
-def _MaybeCache(update_cache, blob_info, pcapdata):
+class _CacheMissing(Exception):
+  pass
+
+
+def _ReadCache(start_times, start_time, end_time, get_func):
+  out = []
+  for i, st in enumerate(start_times):
+    if end_time is not None and end_time < st:
+      break
+    if not start_time or st >= start_time:
+      print 'reading %d starting at time %d' % (i, st)
+      v = get_func(i)
+      if v is None:
+        raise _CacheMissing(i)
+      out.extend(v)
+  return out
+
+
+
+def _MaybeCache(blob_info, pcapdata, start_time, end_time):
   """Update cache when asked to do so. Cache when no cache found."""
 
-  if update_cache:
-    pcapdata.js_packets = None
-    pcapdata.js_streams = None
+  prefix = str(blob_info.key())
 
-  if pcapdata.js_packets is not None:
-    print "We just used cache, didn't we"
-    return
+  jscache = memcache.get(prefix, namespace='jsindex')
+  if jscache:
+    try:
+      def Getter(i):
+        return json.loads(memcache.get('%s_%d' % (prefix, i),
+                                       namespace='jsdata'))
+      packets = _ReadCache(jscache['start_times'], start_time, end_time,
+                           Getter)
+    except _CacheMissing:
+      pass  # Fall through
+    else:
+      jscache['js_packets'] = packets
+      return jscache
 
+  # Need to process the actual data to fill the cache
   reader = blob_info.open()
   begin = time.time()
 
-  j = []
+  start_times = []
+  groups = []
   pairs = set()
   for i, (p, unused_frame) in enumerate(wifipacket.Packetize(reader)):
     if IS_DEBUG and i > SAMPLE_SIZE:
       print 'Done', i
       break
-    j.append(p)
+    if not (i % 2000):
+      print 'parsing packet %d' % i
+      groups.append([])
+      start_times.append(p.pcap_secs)
     pairs.add((p.get('ta', 'no_ta'), p.get('ra', 'no_ra')))
+    # TODO(apenwarr): use lists instead of dicts.
+    #  Repeating the key for every single element is extremely wasteful and
+    #  makes generating/parsing slower than needed.
+    pdata = dict((key, p.get(key)) for key in ALL_FIELDS)
+    groups[-1].append(pdata)
+
+  for i, g in enumerate(groups):
+    gstr = json.dumps(g)
+    print 'saving %d with %d elements (%d bytes)' % (i, len(g), len(gstr))
+    memcache.set(key='%s_%d' % (prefix, i), value=gstr, namespace='jsdata')
 
   pairs_dict = [{'ta': t[0], 'ra': t[1]} for t in pairs]
+  jscache = dict(js_streams=pairs_dict,
+                 start_times=start_times)
+  memcache.set(key=prefix, value=jscache, namespace='jsindex')
 
-  pcapdata.js_packets = json.dumps(j)
-  pcapdata.js_streams = json.dumps(pairs_dict)
+  packets = _ReadCache(start_times, start_time, end_time,
+                       lambda i: groups[i])
+  jscache['js_packets'] = packets
 
   end = time.time()
   print 'Spent on caching', (end - begin), 'sec'
+  return jscache
 
 
 class JsonHandler(_BaseHandler):
@@ -292,12 +334,10 @@ class JsonHandler(_BaseHandler):
     pcapdata = PcapData.GetOrInsertFromBlob(blob_info)
 
     self.response.headers['Content-Type'] = 'application/json'
-    # include in js_bundle any content to be included in json being passed to index.html
-    js_bundle = {
-        'js_packets': pcapdata.js_packets,
-        'js_streams': pcapdata.js_streams,
-    }
-    self.response.out.write(json.dumps(js_bundle))
+
+    jscache = _MaybeCache(blob_info=blob_info, pcapdata=pcapdata,
+                          start_time=None, end_time=None)
+    self.response.out.write(json.dumps(jscache))
 
 
 def Handle500(unused_req, resp, exc):

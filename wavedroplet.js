@@ -24,29 +24,22 @@ var dim = {
 var tooltipLabelsHeight = 15; // height per line in detailed mouseover view
 var number_of_packets;
 
-var availableMetrics = ["antenna",
-    "channel_flags",
+var availableMetrics = [
+    "pcap_secs",
+    "mac_usecs",
+    "ta",
+    "ra",
+    "typestr",
+    "seq",
+    "rate",
+    "antenna",
     "dbm_antnoise",
     "dbm_antsignal",
     "dsmode",
     "duration",
-    "flags",
-    "frag",
-    "freq",
-    "incl_len",
-    "mac_usecs",
-    "order",
     "orig_len",
-    "pcap_secs",
     "powerman",
-    "ta",
-    "type",
-    "typestr",
-    "ra",
-    "rate",
     "retry",
-    "seq",
-    "xa"
 ];
 
 var selectableMetrics = [
@@ -58,6 +51,7 @@ var selectableMetrics = [
     "retry",
     "type",
     "typestr",
+    "dsmode",
     "dbm_antsignal",
     "dbm_antnoise",
     "bad"
@@ -75,7 +69,7 @@ var field_settings = {
     },
     'rate': {
         'parser': Number,
-        'scale_type': 'log',
+        'scale_type': 'linear',
     }
 }
 
@@ -110,7 +104,7 @@ var stream2packetsArray = [];
 
 // get data & visualize
 d3.json('/json/' + get_query_param('key')[0], function(error, json) {
-    if (error) return console.error('error');
+    if (error) return console.error('error', error);
 
     var begin = new Date().getTime();
 
@@ -134,7 +128,7 @@ function to_stream_key(d) {
     return d['ta'].replace(/:/g, '') + '_' + d['ra'].replace(/:/g, '');
 }
 
-// there must be a beter way... 
+// there must be a beter way...
 function from_stream_key(key) {
     var z = key.split('_')
     var ta = z[0].slice(0, 2) + ':' + z[0].slice(2, 4) +
@@ -162,7 +156,7 @@ function complement_stream_id(key) {
 function init(json) {
     // TODO(katepek): Should sanitize here? E.g., discard bad packets?
     // Packets w/o seq?
-    dataset = JSON.parse(json.js_packets);
+    dataset = json.js_packets;
 
     state.to_plot = get_query_param('to_plot');
 
@@ -192,7 +186,7 @@ function init(json) {
 
     pcapSecsAxis.scale(state.scales['pcap_secs']);
 
-    // get array of all packetSecs and use a histogram 
+    // get array of all packetSecs and use a histogram
     var packetSecs = []
 
     dataset.forEach(function(d) {
