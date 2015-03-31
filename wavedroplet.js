@@ -17,10 +17,13 @@ var total_width = w.innerWidth || e.clientWidth || g.clientWidth;
 var total_height = w.innerHeight || e.clientHeight || g.clientHeight;
 var sidebar_width = 180;
 var dim = {
-    width: 0,
-    height: 0,
-    padding: 20
-}
+        width: 0,
+        height: 0,
+        padding: 20
+    }
+    // height of overview chart
+var histHeight = 80;
+
 var tooltipLabelsHeight = 15; // height per line in detailed mouseover view
 var number_of_packets;
 
@@ -168,7 +171,7 @@ function init(json) {
     });
 
     // TODO(katepek): Recalculate and redraw when resized
-    dim.height = (total_height - 3 * state.to_plot.length * dim.padding) / state.to_plot.length;
+    dim.height = (total_height - histHeight - (state.to_plot.length + 1) * dim.padding) / state.to_plot.length;
     dim.width = total_width - 4 * dim.padding - sidebar_width;
 
     var x_range = [dim.padding, dim.width - 3 * dim.padding];
@@ -273,7 +276,6 @@ function draw() {
 }
 
 function add_overview() {
-    var histHeight = 80;
     var max = 0;
 
     // find max bar height and use to set Y axis for overview chart
