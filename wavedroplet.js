@@ -105,12 +105,9 @@ var dataset; // all packets, sorted by pcap_secs
 var stream2packetsDict = {};
 var stream2packetsArray = [];
 
-
-// update title
-document.getElementById("title").innerHTML = get_query_param('filename');
-
-// get data & visualize
-d3.json('/json/' + get_query_param('key')[0], function(error, json) {
+console.log(decodeURIComponent(get_query_param('key')[0]))
+    // get data & visualize
+d3.json('/json/' + decodeURIComponent(get_query_param('key')[0]), function(error, json) {
     if (error) return console.error('error', error);
 
     var begin = new Date().getTime();
@@ -127,10 +124,11 @@ d3.json('/json/' + get_query_param('key')[0], function(error, json) {
 
 function get_query_param(param) {
     var urlKeyValuePairs = {}
-    window.location.search.split("?")[1].split("&").forEach(function(d) {
-        var m = d.split("=");
+    window.location.hash.split("#")[1].split("&").forEach(function(d) {
+        var m = d.split("~");
         urlKeyValuePairs[m[0]] = m[1]
     })
+    console.log(window.location.hash, urlKeyValuePairs)
     return urlKeyValuePairs[param].split(',')
 }
 
