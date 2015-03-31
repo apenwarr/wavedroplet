@@ -130,8 +130,10 @@ function get_query_param(param) {
     return urlKeyValuePairs[param].split(',')
 }
 
-function to_stream_key(d) {
-    return d['ta'].replace(/:/g, '') + '_' + d['ra'].replace(/:/g, '');
+function to_stream_key(d, aliases) {
+    var from = aliases[d['ta']] || d['ta']
+    var to = aliases[d['ra']] || d['ra']
+    return from.replace(/:/g, '') + '_' + to.replace(/:/g, '');
 }
 
 // there must be a beter way...
@@ -154,7 +156,8 @@ function from_stream_key(key) {
 }
 
 function complement_stream_id(key) {
-    var re = /(([a-f]|[0-9])+)_(([a-f]|[0-9])+)/
+    // match any letter/number for aliases
+    var re = /(([a-z]|[A-Z]|[0-9])+)_(([a-z]|[A-Z]|[0-9])+)/
     var z = key.match(re)
     return z[3] + "_" + z[1]
 }
@@ -200,7 +203,8 @@ function init(json) {
         packetSecs.push(d.pcap_secs)
 
         // track streams
-        var streamId = to_stream_key(d);
+        var streamId = to_stream_key(d, json.aliases);
+        d.streamId = streamId;
         if (!stream2packetsDict[streamId]) {
             stream2packetsDict[streamId] = {
                 values: [d]
@@ -525,7 +529,7 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
         .on('click', function() {
             d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], fieldName);
             if (!d) return;
-            select_stream(to_stream_key(d));
+            select_stream(d.streamId);
             update_crosshairs(d, fieldName);
         })
         .on('mousemove', function() {

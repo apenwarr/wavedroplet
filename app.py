@@ -152,8 +152,8 @@ class DownloadHandler(blobstore_handlers.BlobstoreDownloadHandler):
 
 def _Boxes(blob_info):
   """Re-/store from/to memcache number of packets per mac address."""
-
   boxes = memcache.get(str(blob_info.key()), namespace='boxes')
+
   if not boxes:
     reader = blob_info.open()
     boxes = collections.defaultdict(lambda: 0)
@@ -184,7 +184,6 @@ class ViewHandler(_BaseHandler):
                 if n >= cutoff and b != BROADCAST]
     other = sum((n for n in boxes.itervalues() if n < cutoff))
     aliases = pcapdata.aliases
-    print 'aliases are %s' % str(aliases)
 
     if pcapdata.show_hosts:
       checked = dict((h, 1) for h in pcapdata.show_hosts)
@@ -210,7 +209,7 @@ class ViewHandler(_BaseHandler):
 
 class SaveHandler(_BaseHandler):
 
-  @GoogleLoginRequired
+  #@GoogleLoginRequired
   def post(self, blobres):
     blob_info = blobstore.BlobInfo.get(str(urllib.unquote(blobres)))
     capdefault = PcapData.GetDefault()
@@ -223,6 +222,7 @@ class SaveHandler(_BaseHandler):
     pcapdata = PcapData.GetOrInsertFromBlob(blob_info)
     boxes = _Boxes(blob_info)
     pcapdata.show_hosts = []
+
     for b in boxes.keys():
       alias = self.request.get('name-%s' % b)
       if alias:
@@ -340,6 +340,8 @@ class JsonHandler(_BaseHandler):
 
     jscache = _MaybeCache(blob_info=blob_info, pcapdata=pcapdata,
                           start_time=None, end_time=None)
+
+    jscache["aliases"] = pcapdata.aliases
     self.response.out.write(json.dumps(jscache))
 
 
