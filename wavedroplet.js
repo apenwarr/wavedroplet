@@ -521,13 +521,13 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
             }
         })
         .on('click', function() {
-            d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], fieldName);
+            d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], fieldName, false);
             if (!d) return;
             select_stream(d.streamId);
             update_crosshairs(d, fieldName);
         })
         .on('mousemove', function() {
-            d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], fieldName);
+            d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], fieldName, true);
             if (!d) return;
             update_crosshairs(d, fieldName);
         });
@@ -561,7 +561,7 @@ function binary_search_by(field) {
     }).left;
 }
 
-function find_packet(x, y, field) {
+function find_packet(x, y, field, lock) {
     if (x < state.scales['pcap_secs'].range()[0] ||
         x > state.scales['pcap_secs'].range()[1] ||
         y > total_height)
@@ -570,7 +570,7 @@ function find_packet(x, y, field) {
     var pcap_secs = state.scales['pcap_secs'].invert(x);
     var search_in = dataset;
 
-    if (state.selected_stream) {
+    if (state.selected_stream && lock) {
         search_in = stream2packetsDict[state.selected_stream].values;
     }
 
