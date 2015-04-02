@@ -17,11 +17,12 @@ var total_width = w.innerWidth || e.clientWidth || g.clientWidth;
 var total_height = w.innerHeight || e.clientHeight || g.clientHeight;
 var sidebar_width = 180;
 var dim = {
-        width: 0,
-        height: 0,
-        padding: 20
-    }
-    // height of overview chart
+    width: 0,
+    height: 0,
+    padding: 20,
+};
+
+// height of overview chart
 var histHeight = 80;
 
 var tooltipLabelsHeight = 15; // height per line in detailed mouseover view
