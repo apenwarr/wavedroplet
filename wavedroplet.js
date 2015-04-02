@@ -132,7 +132,15 @@ function get_query_param(param) {
 }
 
 function to_stream_key(d, aliases) {
-    return d['ta'].replace(/:/g, '') + '_' + d['ra'].replace(/:/g, '');
+    return d['ta'].replace(/:/g, '') + '---' + d['ra'].replace(/:/g, '');
+}
+
+function to_visible_stream_key(d) {
+    return d.replace(/---/g, '→')
+}
+
+function to_css_stream_key(d) {
+    return d.replace(/→/g, '---')
 }
 
 function replace_address_with_alias(d, aliases) {
@@ -142,9 +150,9 @@ function replace_address_with_alias(d, aliases) {
 
 function complement_stream_id(key) {
     // match any letter/number for aliases
-    var re = /(([a-z]|[A-Z]|[0-9])+)_(([a-z]|[A-Z]|[0-9])+)/
+    var re = /(([a-z]|[A-Z]|[0-9])+)---(([a-z]|[A-Z]|[0-9])+)/
     var z = key.match(re)
-    return z[3] + "_" + z[1]
+    return z[3] + "---" + z[1]
 }
 
 function init(json) {
@@ -393,9 +401,9 @@ function add_legend() {
                 .attr('class', 'legend stream_' + streamId)
                 .attr('x', col * total_length + 2 * dim.padding)
                 .attr('y', (row + 1.5) * dim.padding)
-                .text(streamId)
+                .text(to_visible_stream_key(streamId))
                 .on('click', function() {
-                    select_stream(this.textContent);
+                    select_stream(to_css_stream_key(this.textContent));
                 });
         } else {
             break;
@@ -634,6 +642,9 @@ function update_show_Tooltip(data) {
         .selectAll(".tooltipValues")
         .data(availableMetrics)
         .text(function(k) {
+            if (k == "streamId") {
+                return k + ": " + to_visible_stream_key(data[k]);
+            }
             return k + ": " + data[k]
         });
 }
@@ -661,7 +672,7 @@ function select_stream(streamId) {
             .classed("selected", false);
 
         state.selected_stream = streamId;
-        butter_bar('Locked to: ' + streamId)
+        butter_bar('Locked to: ' + to_visible_stream_key(streamId));
     } else {
         d3.selectAll(".selected").classed("selected", false);
         d3.selectAll(".selectedComplement").classed("selectedComplement", false);
