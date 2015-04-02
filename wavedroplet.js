@@ -29,20 +29,20 @@ var tooltipLabelsHeight = 15; // height per line in detailed mouseover view
 var number_of_packets;
 
 var availableMetrics = [
-    "pcap_secs",
-    "mac_usecs",
-    "streamId",
     "ta",
     "ra",
     "typestr",
     "seq",
     "rate",
+    "orig_len",
+    "pcap_secs",
+    "mac_usecs",
+    "streamId",
     "antenna",
     "dbm_antnoise",
     "dbm_antsignal",
     "dsmode",
     "duration",
-    "orig_len",
     "powerman",
     "retry",
 ];
