@@ -244,7 +244,7 @@ class SaveHandler(_BaseHandler):
     capdefault.put()
     pcapdata.put()
 
-    self.redirect('/d3viz.html#key~%s&to_plot~%s'
+    self.redirect('/d3viz.html#key=%s&to_plot=%s'
                   % (_Esc(str(blob_info.key())),
                   _Esc(','.join(pcapdata.show_fields))))
 

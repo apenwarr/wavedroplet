@@ -123,8 +123,8 @@ d3.json('/json/' + decodeURIComponent(get_query_param('key')[0]), function(error
 
 function get_query_param(param) {
     var urlKeyValuePairs = {}
-    window.location.hash.split("#")[1].split("&").forEach(function(d) {
-        var m = d.split("~");
+    window.location.href.split("#")[1].split("&").forEach(function(d) {
+        var m = d.split("=");
         urlKeyValuePairs[m[0]] = m[1]
     })
     return urlKeyValuePairs[param].split(',')
