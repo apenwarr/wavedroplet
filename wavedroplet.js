@@ -105,8 +105,7 @@ var dataset; // all packets, sorted by pcap_secs
 var stream2packetsDict = {};
 var stream2packetsArray = [];
 
-console.log(decodeURIComponent(get_query_param('key')[0]))
-    // get data & visualize
+// get data & visualize
 d3.json('/json/' + decodeURIComponent(get_query_param('key')[0]), function(error, json) {
     if (error) return console.error('error', error);
 
@@ -128,33 +127,16 @@ function get_query_param(param) {
         var m = d.split("~");
         urlKeyValuePairs[m[0]] = m[1]
     })
-    console.log(window.location.hash, urlKeyValuePairs)
     return urlKeyValuePairs[param].split(',')
 }
 
 function to_stream_key(d, aliases) {
-    var from = aliases[d['ta']] || d['ta']
-    var to = aliases[d['ra']] || d['ra']
-    return from.replace(/:/g, '') + '_' + to.replace(/:/g, '');
+    return d['ta'].replace(/:/g, '') + '_' + d['ra'].replace(/:/g, '');
 }
 
-// there must be a beter way...
-function from_stream_key(key) {
-    var z = key.split('_')
-    var ta = z[0].slice(0, 2) + ':' + z[0].slice(2, 4) +
-        ':' + z[0].slice(4, 6) +
-        ':' + z[0].slice(6, 8) +
-        ':' + z[0].slice(8, 10) +
-        ':' + z[0].slice(10, 12);
-    var ra = z[1].slice(0, 2) + ':' + z[1].slice(2, 4) +
-        ':' + z[1].slice(4, 6) +
-        ':' + z[1].slice(6, 8) +
-        ':' + z[1].slice(8, 10) +
-        ':' + z[1].slice(10, 12);
-    return {
-        'ta': ta,
-        'ra': ra
-    };
+function replace_address_with_alias(d, aliases) {
+    d['ta'] = aliases[d['ta']] || d['ta']
+    d['ra'] = aliases[d['ra']] || d['ra']
 }
 
 function complement_stream_id(key) {
@@ -204,6 +186,7 @@ function init(json) {
         // store time of packet
         packetSecs.push(d.pcap_secs)
 
+        replace_address_with_alias(d, json.aliases);
         // track streams
         var streamId = to_stream_key(d, json.aliases);
         d.streamId = streamId;
@@ -664,7 +647,7 @@ function select_stream(streamId) {
         d3.selectAll(".legend").classed("selected", false).classed("selectedComplement", false)
 
         state.to_plot.forEach(function(d) {
-            d3.selectAll(".pcap_secs_vs" + state.to_plot).classed("selected", false).classed("selectedComplement", false)
+            d3.selectAll(".pcap_vs_" + d).classed("selected", false).classed("selectedComplement", false)
         })
 
         // select these points
