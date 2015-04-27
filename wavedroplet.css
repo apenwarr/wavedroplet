@@ -27,6 +27,11 @@
       font-size: 11px;
     }
 
+    .text-label {
+      font-family: sans-serif;
+      font-size: 11px;
+    }
+
     .focus {
       opacity: 1;
       stroke: #185195;

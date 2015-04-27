@@ -19,7 +19,7 @@ var sidebar_width = 180;
 var dim = {
     width: 0,
     height: 0,
-    padding: 20,
+    padding: 30,
 };
 
 // height of overview chart
@@ -170,7 +170,7 @@ function init(json) {
     });
 
     // TODO(katepek): Recalculate and redraw when resized
-    dim.height = (total_height - histHeight - (state.to_plot.length + 1) * dim.padding) / state.to_plot.length;
+    dim.height = Math.max((total_height - histHeight - (state.to_plot.length + 1) * dim.padding) / state.to_plot.length, 200);
     dim.width = total_width - 4 * dim.padding - sidebar_width;
 
     var x_range = [dim.padding, dim.width - 3 * dim.padding];
@@ -492,10 +492,20 @@ function draw_metric_axes(svg, fieldName, dim) {
         .orient('right')
         .ticks(5);
 
+    // x axis
     svg.append('g')
         .attr('class', 'axis x metric')
         .attr('transform', 'translate(0,' + (dim.height - 1.5 * dim.padding) + ')')
         .call(pcapSecsAxis);
+
+    // title for plot
+    svg.append("text")
+        .attr('transform', 'translate(' + dim.width / 2 + ',' + (dim.height - 1.5 * dim.padding + 30) + ')')
+        .attr("class", "text-label")
+        .attr("text-anchor", "middle")
+        .text(fieldName);
+
+    // y axis
     svg.append('g')
         .attr('class', 'axis y')
         .attr('transform', 'translate(' + (dim.width - 3 * dim.padding) + ',0)')
