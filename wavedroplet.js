@@ -528,6 +528,9 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
         })
         .on('mousemove', function() {
             d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], fieldName, true);
+            //      if (!state.selected_stream) {
+            //          // do nothing
+            //      }
             if (!d) return;
             update_crosshairs(d, fieldName);
         });
@@ -649,6 +652,23 @@ function update_show_Tooltip(data) {
         });
 }
 
+function highlight_stream(streamId) {
+    d3.selectAll(".legend").classed("selected", false).classed("selectedComplement", false)
+
+    state.to_plot.forEach(function(d) {
+        d3.selectAll(".pcap_vs_" + d).classed("selected", false).classed("selectedComplement", false)
+    })
+
+    // select these points
+    d3.selectAll('.stream_' + streamId)
+        .classed("selected", true)
+        .classed("selectedComplement", false);
+
+    d3.selectAll('.stream_' + complement_stream_id(streamId))
+        .classed("selectedComplement", true)
+        .classed("selected", false);
+}
+
 function select_stream(streamId) {
 
     // if new stream selected, update view & selected stream
@@ -656,20 +676,7 @@ function select_stream(streamId) {
 
         // need to clear because from the legend the user can click on another stream even when a stream is "locked"
         // which is not possible from the points since you can only mouseover your state.selected_stream
-        d3.selectAll(".legend").classed("selected", false).classed("selectedComplement", false)
-
-        state.to_plot.forEach(function(d) {
-            d3.selectAll(".pcap_vs_" + d).classed("selected", false).classed("selectedComplement", false)
-        })
-
-        // select these points
-        d3.selectAll('.stream_' + streamId)
-            .classed("selected", true)
-            .classed("selectedComplement", false);
-
-        d3.selectAll('.stream_' + complement_stream_id(streamId))
-            .classed("selectedComplement", true)
-            .classed("selected", false);
+        highlight_stream(streamId);
 
         state.selected_stream = streamId;
         butter_bar('Locked to: ' + to_visible_stream_key(streamId));
