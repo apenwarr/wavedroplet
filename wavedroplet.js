@@ -106,6 +106,12 @@ var dataset; // all packets, sorted by pcap_secs
 var stream2packetsDict = {};
 var stream2packetsArray = [];
 
+// set up brush and brushed function
+var brush = d3.svg.brush()
+    .on("brush", function() {
+        zoom_to_domain(brush.empty() ? state.scales['pcap_secs_fixed'].domain() : brush.extent())
+    });
+
 // get data & visualize
 d3.json('/json/' + decodeURIComponent(get_query_param('key')[0]), function(error, json) {
     if (error) return console.error('error', error);
@@ -173,8 +179,8 @@ function init(json) {
     dim.height = Math.max((total_height - histHeight - (state.to_plot.length + 1) * dim.padding) / state.to_plot.length, 200);
     dim.width = total_width - 4 * dim.padding - sidebar_width;
 
-    var x_range = [dim.padding, dim.width - 3 * dim.padding];
-    var y_range = [dim.height - 1.5 * dim.padding, 1.5 * dim.padding];
+    var x_range = [dim.padding, dim.width - 2 * dim.padding];
+    var y_range = [dim.height - dim.padding, dim.padding];
 
     log('total_height = ' + total_height);
     log('height = ' + dim.height);
@@ -276,6 +282,7 @@ function draw() {
     add_legend();
 }
 
+
 function add_overview() {
     var max = 0;
 
@@ -315,7 +322,7 @@ function add_overview() {
 
     svg.append('g')
         .attr('class', 'axis y overview')
-        .attr('transform', 'translate(' + (dim.width - 3 * dim.padding) + ', 0)')
+        .attr('transform', 'translate(' + (dim.width - 2 * dim.padding) + ', 0)')
         .call(overviewYaxis);
 
     // draw bars
@@ -336,24 +343,16 @@ function add_overview() {
             return histHeight - state.scales["packetNumPerTenth"](d.y)
         });
 
-    // set up brush
-    var brush = d3.svg.brush()
-        .x(state.scales['pcap_secs_fixed'])
-        .on("brush", brushed);
+    // set initial x value for brush
+    brush.x(state.scales['pcap_secs_fixed'])
 
+    // append brush
     svg.append("g")
         .attr("class", "x brush")
         .call(brush)
         .selectAll("rect")
         .attr("y", -6)
         .attr("height", histHeight + 7);
-
-    // on brush, zoom/pan rest of charts
-    function brushed() {
-        state.scales['pcap_secs'].domain(brush.empty() ? state.scales['pcap_secs_fixed'].domain() : brush.extent());
-        d3.selectAll(".axis.x.metric").call(pcapSecsAxis);
-        d3.selectAll(".points").attr('cx', scaled('pcap_secs'))
-    }
 }
 
 function add_butter_bar() {
@@ -387,7 +386,7 @@ function add_legend() {
 
     var font_width = 6;
     var key_length = font_width * ((12 + 5) * 2 + 1);
-    var total_length = key_length + 4.5 * dim.padding;
+    var total_length = key_length + 4 * dim.padding;
     var n_cols = Math.floor(total_width / total_length);
 
     for (var i in stream2packetsArray) {
@@ -493,14 +492,28 @@ function draw_metric_axes(svg, fieldName, dim) {
         .ticks(5);
 
     // x axis
-    svg.append('g')
+    var xaxis = svg.append('g')
         .attr('class', 'axis x metric')
-        .attr('transform', 'translate(0,' + (dim.height - 1.5 * dim.padding) + ')')
-        .call(pcapSecsAxis);
+        .on("dblclick", function() {
+            var currentDomain = state.scales['pcap_secs'].domain();
+            var zoomCenter = state.scales['pcap_secs'].invert(d3.event.x);
+
+            var newDomain = [(zoomCenter - currentDomain[0]) / 2 + currentDomain[0], (zoomCenter - currentDomain[1]) / 2 + currentDomain[1]];
+
+            // update brush domain and visible extent
+            brush.extent(newDomain)
+            d3.selectAll(".brush").call(brush)
+
+            zoom_to_domain(newDomain)
+        })
+        .attr('transform', 'translate(0,' + (dim.height - dim.padding) + ')')
+
+    xaxis.call(pcapSecsAxis);
+    xaxis.append("rect").attr('height', dim.padding).attr('width', dim.width).style('opacity', 0);
 
     // title for plot
     svg.append("text")
-        .attr('transform', 'translate(' + dim.width / 2 + ',' + (dim.height - 1.5 * dim.padding + 30) + ')')
+        .attr('transform', 'translate(' + dim.width / 2 + ',' + (dim.height - dim.padding + 30) + ')')
         .attr("class", "text-label")
         .attr("text-anchor", "middle")
         .text(fieldName);
@@ -508,14 +521,21 @@ function draw_metric_axes(svg, fieldName, dim) {
     // y axis
     svg.append('g')
         .attr('class', 'axis y')
-        .attr('transform', 'translate(' + (dim.width - 3 * dim.padding) + ',0)')
+        .attr('transform', 'translate(' + (dim.width - 2 * dim.padding) + ',0)')
         .call(yAxis);
+}
+
+function zoom_to_domain(newDomain) {
+    // update charts
+    state.scales['pcap_secs'].domain(newDomain);
+    d3.selectAll(".axis.x.metric").call(pcapSecsAxis);
+    d3.selectAll(".points").attr('cx', scaled('pcap_secs'))
 }
 
 function draw_hidden_rect_for_mouseover(svg, fieldName) {
     svg.append('rect')
         .attr('width', dim.width)
-        .attr('height', dim.height)
+        .attr('height', dim.height - dim.padding)
         .attr("class", "plotRect")
         .style('fill', 'none')
         .style('pointer-events', 'all')
