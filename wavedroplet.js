@@ -16,14 +16,24 @@ var w = window,
 var total_width = w.innerWidth || e.clientWidth || g.clientWidth;
 var total_height = w.innerHeight || e.clientHeight || g.clientHeight;
 var sidebar_width = 180;
-var dim = {
-    width: 0,
-    height: 0,
-    padding: 30,
-};
-
-// height of overview chart
-var histHeight = 80;
+// set margin for set of charts
+var dimensions = {
+    page: {
+        left: 20,
+        top: 30
+    },
+    height: {
+        per_chart: 0,
+        overview: 80,
+        x_axis: 20,
+        above_charts: 5,
+        below_charts: 30
+    },
+    width: {
+        chart: 0,
+        y_axis: 60
+    }
+}
 
 var tooltipLabelsHeight = 15; // height per line in detailed mouseover view
 var number_of_packets;
@@ -176,14 +186,14 @@ function init(json) {
     });
 
     // TODO(katepek): Recalculate and redraw when resized
-    dim.height = Math.max((total_height - histHeight - (state.to_plot.length + 1) * dim.padding) / state.to_plot.length, 200);
-    dim.width = total_width - 4 * dim.padding - sidebar_width;
+    dimensions.height.per_chart = Math.max((total_height - dimensions.height.overview - (state.to_plot.length + 1) * (dimensions.height.above_charts + dimensions.height.below_charts + dimensions.height.x_axis)) / state.to_plot.length, 200);
+    dimensions.width.chart = total_width - dimensions.page.left - dimensions.width.y_axis - sidebar_width;
 
-    var x_range = [dim.padding, dim.width - 2 * dim.padding];
-    var y_range = [dim.height - dim.padding, dim.padding];
+    var x_range = [0, dimensions.width.chart];
+    var y_range = [dimensions.height.per_chart, 0];
 
     log('total_height = ' + total_height);
-    log('height = ' + dim.height);
+    log('height = ' + dimensions.height.per_chart);
 
     add_scale('pcap_secs', x_range);
     state.to_plot.forEach(function(d) {
@@ -276,7 +286,7 @@ function draw() {
     add_overview();
 
     state.to_plot.forEach(function(d) {
-        visualize(d, dim)
+        visualize(d)
     })
 
     add_legend();
@@ -292,7 +302,7 @@ function add_overview() {
             max = d.y;
         }
     })
-    state.scales["packetNumPerTenth"] = d3.scale.linear().domain([0, max]).range([histHeight, 0])
+    state.scales["packetNumPerTenth"] = d3.scale.linear().domain([0, max]).range([dimensions.height.overview, 0])
 
     // set up axis
     var overviewYaxis = d3.svg.axis()
@@ -307,26 +317,28 @@ function add_overview() {
         .ticks(5);
 
     // start building the chart
-    var svg = d3
+    var overviewChart = d3
         .select('body')
         .append('svg')
         .attr('id', 'histogramZoomNav')
-        .attr('width', dim.width)
-        .attr('height', histHeight + 20);
+        .attr('width', dimensions.width.chart + dimensions.width.y_axis)
+        .attr('height', dimensions.height.overview + dimensions.height.x_axis + dimensions.height.above_charts + dimensions.height.below_charts)
+        .append("g")
+        .attr("transform", "translate(" + dimensions.page.left + ",0)");
 
     // append x-axis
-    svg.append('g')
+    overviewChart.append('g')
         .attr('class', 'axis x overview')
-        .attr('transform', 'translate(0,' + histHeight + ')')
+        .attr('transform', 'translate(0,' + dimensions.height.overview + ')')
         .call(overviewXaxis);
 
-    svg.append('g')
+    overviewChart.append('g')
         .attr('class', 'axis y overview')
-        .attr('transform', 'translate(' + (dim.width - 2 * dim.padding) + ', 0)')
+        .attr('transform', 'translate(' + dimensions.width.chart + ', 0)')
         .call(overviewYaxis);
 
     // draw bars
-    svg.selectAll(".histBar")
+    overviewChart.selectAll(".histBar")
         .data(histogramPacketNum)
         .enter().append("rect")
         .attr("class", "histBar")
@@ -340,66 +352,70 @@ function add_overview() {
             return state.scales['pcap_secs_fixed'](d.x + d.dx) - state.scales['pcap_secs_fixed'](d.x)
         })
         .attr("height", function(d) {
-            return histHeight - state.scales["packetNumPerTenth"](d.y)
+            return dimensions.height.overview - state.scales["packetNumPerTenth"](d.y)
         });
 
     // set initial x value for brush
     brush.x(state.scales['pcap_secs_fixed'])
 
     // append brush
-    svg.append("g")
+    overviewChart.append("g")
         .attr("class", "x brush")
         .call(brush)
         .selectAll("rect")
         .attr("y", -6)
-        .attr("height", histHeight + 7);
+        .attr("height", dimensions.height.overview + 7);
 }
 
 function add_butter_bar() {
+    var butter_bar_height = 30;
     var svg = d3
         .select('body')
         .append('svg')
         .attr('id', 'butter_bar')
-        .attr('width', dim.width)
-        .attr('height', dim.padding);
+        .attr('width', dimensions.width.chart)
+        .attr('height', butter_bar_height);
     svg.append('rect')
         .attr('id', 'butter_bar_box')
-        .attr('width', dim.width)
-        .attr('height', dim.padding)
+        .attr('width', dimensions.width.chart)
+        .attr('height', butter_bar_height)
         .style('fill', 'none');
     svg.append('text')
         .attr('id', 'butter_bar_msg')
         .attr('class', 'legend')
-        .attr('x', dim.width / 2 - 4 * dim.padding)
-        .attr('y', 2 + dim.padding / 2)
+        .attr('x', dimensions.width.chart / 2)
+        .attr('y', butter_bar_height / 2 + 5)
         .style('fill', 'black')
         .style('font-size', 14);
 }
 
 function add_legend() {
-    var svg = d3
+    var legend = d3
         .select('body')
         .append('svg')
         .attr('class', 'legend')
-        .attr('width', dim.width)
-        .attr('height', dim.height);
+        .attr('width', dimensions.width.chart)
+        .attr('height', dimensions.height.per_chart)
+        .append("g")
+        .attr("transform", "translate(" + dimensions.page.left + ",0)");
 
     var font_width = 6;
     var key_length = font_width * ((12 + 5) * 2 + 1);
-    var total_length = key_length + 4 * dim.padding;
+    var total_length = key_length;
     var n_cols = Math.floor(total_width / total_length);
 
     for (var i in stream2packetsArray) {
         var streamId = stream2packetsArray[i];
         var count = stream2packetsDict[streamId].values.length;
+        var legend_line_height = 30;
         // only show on legend if more than 1% belong to this stream
         if (count > number_of_packets * .01) {
             var col = i % n_cols;
             var row = Math.floor(i / n_cols);
-            svg.append('text')
+            legend.append('text')
                 .attr('class', 'legend stream_' + streamId)
-                .attr('x', col * total_length + 2 * dim.padding)
-                .attr('y', (row + 1.5) * dim.padding)
+                .attr('x', col * total_length)
+                .attr('y', (row + .5) * legend_line_height)
                 .text(to_visible_stream_key(streamId))
                 .on('click', function() {
                     select_stream(to_css_stream_key(this.textContent));
@@ -428,10 +444,10 @@ function butter_bar(text) {
 }
 
 d3.select('#tooltip')
-    .style('top', (2 * dim.padding) + 'px')
+    .style('top', dimensions.page.top + 'px')
     .classed('hidden', true)
     .append("svg")
-    .attr("width", 200)
+    .attr("width", sidebar_width - 10)
     .attr("height", availableMetrics.length * tooltipLabelsHeight)
     .selectAll('.tooltipValues')
     .data(availableMetrics)
@@ -442,34 +458,36 @@ d3.select('#tooltip')
         return i * tooltipLabelsHeight + 10
     });
 
-function visualize(field, dim) {
+function visualize(field) {
     log('About to visualize ' + field);
 
     // set up main svg for plot
-    var svg = d3.select('body')
+    var mainChart = d3.select('body')
         .append('svg')
         .attr('class', 'plot_' + field)
-        .attr('width', dim.width)
-        .attr('height', dim.height);
+        .attr('width', dimensions.width.chart + dimensions.width.y_axis)
+        .attr('height', dimensions.height.per_chart + dimensions.height.x_axis + dimensions.height.above_charts + dimensions.height.below_charts)
+        .append("g")
+        .attr("transform", "translate(" + dimensions.page.left + "," + dimensions.height.above_charts + ")");;
 
     // set up crosshairs element
-    reticle[field] = svg.append('g')
+    reticle[field] = mainChart.append('g')
         .attr("class", "focus")
         .style('display', null);
 
     // draw points
     stream2packetsArray.forEach(function(d) {
-        draw_points_per_stream(field, d, stream2packetsDict, svg)
+        draw_points_per_stream(field, d, stream2packetsDict, mainChart)
     });
 
     // x and y axis
-    draw_metric_axes(svg, field, dim);
+    draw_metric_axes(mainChart, field);
 
     // Add crosshairs
     draw_crosshairs(reticle[field]);
 
     // append the rectangle to capture mouse movements
-    draw_hidden_rect_for_mouseover(svg, field)
+    draw_hidden_rect_for_mouseover(mainChart, field)
 }
 
 // visualization set up functions
@@ -485,7 +503,7 @@ function draw_points_per_stream(fieldName, streamId, packetsDictionary, svg) {
         .attr('r', 2);
 }
 
-function draw_metric_axes(svg, fieldName, dim) {
+function draw_metric_axes(svg, fieldName) {
     var yAxis = d3.svg.axis()
         .scale(state.scales[fieldName])
         .orient('right')
@@ -506,14 +524,14 @@ function draw_metric_axes(svg, fieldName, dim) {
 
             zoom_to_domain(newDomain)
         })
-        .attr('transform', 'translate(0,' + (dim.height - dim.padding) + ')')
+        .attr('transform', 'translate(0,' + (dimensions.height.per_chart) + ')')
 
     xaxis.call(pcapSecsAxis);
-    xaxis.append("rect").attr('height', dim.padding).attr('width', dim.width).style('opacity', 0);
+    xaxis.append("rect").attr('height', dimensions.height.x_axis).attr('width', dimensions.width.chart).style('opacity', 0);
 
     // title for plot
     svg.append("text")
-        .attr('transform', 'translate(' + dim.width / 2 + ',' + (dim.height - dim.padding + 30) + ')')
+        .attr('transform', 'translate(' + dimensions.width.chart / 2 + ',' + (dimensions.height.per_chart + dimensions.height.x_axis + dimensions.height.below_charts / 3) + ')')
         .attr("class", "text-label")
         .attr("text-anchor", "middle")
         .text(fieldName);
@@ -521,7 +539,7 @@ function draw_metric_axes(svg, fieldName, dim) {
     // y axis
     svg.append('g')
         .attr('class', 'axis y')
-        .attr('transform', 'translate(' + (dim.width - 2 * dim.padding) + ',0)')
+        .attr('transform', 'translate(' + (dimensions.width.chart) + ',0)')
         .call(yAxis);
 }
 
@@ -534,8 +552,8 @@ function zoom_to_domain(newDomain) {
 
 function draw_hidden_rect_for_mouseover(svg, fieldName) {
     svg.append('rect')
-        .attr('width', dim.width)
-        .attr('height', dim.height - dim.padding)
+        .attr('width', dimensions.width.chart)
+        .attr('height', dimensions.height.per_chart)
         .attr("class", "plotRect")
         .style('fill', 'none')
         .style('pointer-events', 'all')
@@ -570,12 +588,12 @@ function draw_crosshairs(element) {
     element.append('line')
         .attr('class', 'x')
         .attr('y1', 0)
-        .attr('y2', dim.height);
+        .attr('y2', dimensions.height.per_chart);
 
     element.append('line')
         .attr('class', 'y')
         .attr('x1', 0)
-        .attr('x2', dim.width);
+        .attr('x2', dimensions.width.chart);
 
     element.append('circle')
         .attr('class', 'y')
