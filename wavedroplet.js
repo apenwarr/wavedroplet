@@ -257,21 +257,59 @@ function init(json) {
     })
 }
 
+var excludedData = {
+    'no_pcap_value': {
+        count: 0
+    },
+    'non_positive_pcap_value': {
+        count: 0
+    },
+    'type_ack': {
+        count: 0
+    },
+    'null_ta': {
+        count: 0
+    },
+    'null_ra': {
+        count: 0
+    },
+    'missing_plottype': {
+        count: 0
+    }
+}
 
 function sanitize_dataset() {
+    var before = dataset.length;
     log('Before filtering: ' + dataset.length);
     dataset = dataset.filter(function(d) {
-        if (!d['pcap_secs']) return false;
-        if (d['pcap_secs'] <= 0) return false;
+        if (!d['pcap_secs']) {
+            excludedData.no_pcap_value.count++;
+        }
+        if (d['pcap_secs'] <= 0) {
+            excludedData.non_positive_pcap_value.count++;
+        }
 
-        if (!d['ta'] || !d['ra'])
+        // exclude ACK
+        if (d['typestr'] == '1D ACK') {
+            excludedData.type_ack.count++;
             return false;
+        }
+
+        // exclude null ta (remove this?)
+        if (!d['ta']) {
+            excludedData.null_ta.count++;
+            return false;
+        }
 
         for (var idx in state.to_plot) {
-            if (!d.hasOwnProperty(state.to_plot[idx])) return false;
+            if (!d.hasOwnProperty(state.to_plot[idx])) {
+                excludedData.missing_plottype.count++;
+            }
         }
         return true;
     });
+    log(excludedData)
+    log("Percent of packets removed: ", (before - dataset.length) / before)
     log('After filtering: ' + dataset.length);
 }
 
