@@ -186,7 +186,7 @@ function init(json) {
     });
 
     // TODO(katepek): Recalculate and redraw when resized
-    dimensions.height.per_chart = Math.max((total_height - dimensions.height.overview - (state.to_plot.length + 1) * (dimensions.height.above_charts + dimensions.height.below_charts + dimensions.height.x_axis)) / state.to_plot.length, 200);
+    dimensions.height.per_chart = Math.max((total_height - dimensions.height.overview - dimensions.page.top - (state.to_plot.length + 1) * (dimensions.height.above_charts + dimensions.height.below_charts + dimensions.height.x_axis)) / state.to_plot.length, 200);
     dimensions.width.chart = total_width - dimensions.page.left - dimensions.width.y_axis - sidebar_width;
 
     var x_range = [0, dimensions.width.chart];
