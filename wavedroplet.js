@@ -75,23 +75,31 @@ var selectableMetrics = [
 // define settings per viewable metric
 var field_settings = {
     'pcap_secs': {
-        'parser': parseFloat,
+        'value_type': 'number',
         'scale_type': 'linear',
     },
     'seq': {
-        'parser': Number,
+        'value_type': 'number',
         'scale_type': 'linear',
     },
     'rate': {
-        'parser': Number,
+        'value_type': 'number',
         'scale_type': 'linear',
+    },
+    'bad': {
+        'value_type': 'boolean',
+        'scale_type': 'linear'
+    },
+    'retry': {
+        'value_type': 'boolean',
+        'scale_type': 'linear'
     }
 }
 
 for (var i in selectableMetrics) {
     if (!field_settings[selectableMetrics[i]]) {
         field_settings[selectableMetrics[i]] = {
-            'parser': parseFloat,
+            'value_type': 'number',
             'scale_type': 'linear'
         }
     }
@@ -118,7 +126,7 @@ var stream2packetsArray = [];
 
 // set up brush and brushed function
 var brush = d3.svg.brush()
-    .on("brush", function() {
+    .on("brushend", function() {
         zoom_to_domain(brush.empty() ? state.scales['pcap_secs_fixed'].domain() : brush.extent())
     });
 
@@ -186,7 +194,7 @@ function init(json) {
     });
 
     // TODO(katepek): Recalculate and redraw when resized
-    dimensions.height.per_chart = Math.max((total_height - dimensions.height.overview - dimensions.page.top - (state.to_plot.length + 1) * (dimensions.height.above_charts + dimensions.height.below_charts + dimensions.height.x_axis)) / state.to_plot.length, 200);
+    dimensions.height.per_chart = Math.max((total_height - dimensions.height.overview - dimensions.page.top - (state.to_plot.length + 1) * (dimensions.height.above_charts + dimensions.height.below_charts + dimensions.height.x_axis)) / state.to_plot.length, 100);
     dimensions.width.chart = total_width - dimensions.page.left - dimensions.width.y_axis - sidebar_width;
 
     var x_range = [0, dimensions.width.chart];
@@ -241,7 +249,6 @@ function init(json) {
     stream2packetsArray.sort(function(a, b) {
         return stream2packetsDict[b].values.length - stream2packetsDict[a].values.length
     })
-
 }
 
 
@@ -278,6 +285,29 @@ function scaled(name) {
     return function(d) {
         return state.scales[name](d[name]);
     }
+}
+
+function createLine(d, currentField, xFunc) {
+    // percent 1 vs 0
+    var runningSeq = [];
+    var runningCount = 0;
+    var rollingAverageLength = 20
+    var k = d3.svg.area()
+        .x(xFunc)
+        .y0(function(d) {
+            return dimensions.height.per_chart
+        })
+        .y1(function(d) {
+            if (runningSeq.length > rollingAverageLength) {
+                runningCount = runningCount - runningSeq.shift();
+            }
+            runningSeq.push(d[currentField]);
+            runningCount = runningCount + d[currentField];
+            return dimensions.height.per_chart * .45 * (1 - runningCount / rollingAverageLength) + dimensions.height.per_chart * .55;
+        })
+        .interpolate("basis");
+
+    return k(dataset)
 }
 
 function draw() {
@@ -470,24 +500,80 @@ function visualize(field) {
         .append("g")
         .attr("transform", "translate(" + dimensions.page.left + "," + dimensions.height.above_charts + ")");;
 
+    if (field_settings[field].value_type == 'number') {
+        visualize_numbers(field, mainChart)
+    } else if (field_settings[field].value_type == 'boolean') {
+        visualize_boolean(field, mainChart);
+    }
+
+}
+
+function visualize_boolean(field, svg) {
+
+    var boolean_boxes = svg.append('g').attr("class", 'boolean_boxes_' + field)
+        // draw boolean boxes
+    stream2packetsArray.forEach(function(d) {
+        draw_boolean_boxes_per_stream(field, d, stream2packetsDict, boolean_boxes)
+    });
+
+    svg.append("rect")
+        .attr("class", "background_bool")
+        .attr("width", dimensions.width.chart)
+        .attr("height", dimensions.height.per_chart * .45)
+        .attr("x", 0)
+        .attr("y", dimensions.height.per_chart * .55)
+        .style("stroke", "none")
+        .style("fill", "#FFf7ff");
+
+    svg.append("path")
+        .attr("class", "line_bottom_bool_" + field)
+        .attr("d", createLine(dataset, field, scaled('pcap_secs')))
+        .style("stroke", "none")
+        .style("fill", "#291C5E");
+
+}
+
+// visualization set up functions
+function draw_boolean_boxes_per_stream(fieldName, streamId, packetsDictionary, svg) {
+    svg.append('g').attr("class", 'pcap_vs_' + fieldName + " stream_" + streamId + " metricChart").attr("fill", 'grey')
+        .selectAll('.bool_boxes')
+        .data(packetsDictionary[streamId].values)
+        .enter()
+        .append('rect')
+        .attr('class', 'bool_boxes')
+        .attr('x', scaled('pcap_secs'))
+        .attr('y', function(d) {
+            if (d[fieldName] == 1) {
+                return 0
+            } else {
+                return dimensions.height.per_chart * .2
+            }
+        })
+        .attr('width', 2)
+        .attr('opacity', .5)
+        .attr('height', dimensions.height.per_chart * .18);
+
+}
+
+function visualize_numbers(field, svg) {
     // set up crosshairs element
-    reticle[field] = mainChart.append('g')
+    reticle[field] = svg.append('g')
         .attr("class", "focus")
         .style('display', null);
 
     // draw points
     stream2packetsArray.forEach(function(d) {
-        draw_points_per_stream(field, d, stream2packetsDict, mainChart)
+        draw_points_per_stream(field, d, stream2packetsDict, svg)
     });
 
     // x and y axis
-    draw_metric_axes(mainChart, field);
+    draw_metric_axes(svg, field);
 
     // Add crosshairs
     draw_crosshairs(reticle[field]);
 
     // append the rectangle to capture mouse movements
-    draw_hidden_rect_for_mouseover(mainChart, field)
+    draw_hidden_rect_for_mouseover(svg, field)
 }
 
 // visualization set up functions
@@ -548,6 +634,14 @@ function zoom_to_domain(newDomain) {
     state.scales['pcap_secs'].domain(newDomain);
     d3.selectAll(".axis.x.metric").call(pcapSecsAxis);
     d3.selectAll(".points").attr('cx', scaled('pcap_secs'))
+    d3.selectAll(".bool_boxes").attr('x', scaled('pcap_secs'))
+
+    // todo: better way of calling this more generally to update x-axis scale?
+    state.to_plot.forEach(function(d) {
+        if (field_settings[d].value_type == 'boolean') {
+            d3.selectAll(".line_bottom_bool_" + d).attr("d", createLine(dataset, d, scaled('pcap_secs')))
+        }
+    })
 }
 
 function draw_hidden_rect_for_mouseover(svg, fieldName) {
@@ -604,7 +698,6 @@ function draw_crosshairs(element) {
         .attr('dx', 8)
         .attr('dy', '-.5em');
 }
-
 
 function binary_search_by(field) {
     return d3.bisector(function(d) {
