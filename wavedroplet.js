@@ -130,6 +130,12 @@ var brush = d3.svg.brush()
         zoom_to_domain(brush.empty() ? state.scales['pcap_secs_fixed'].domain() : brush.extent())
     });
 
+// binary search function for pcap_secs
+var binary_search_by_pcap_secs =
+    d3.bisector(function(d) {
+        return d.pcap_secs
+    }).left
+
 // get data & visualize
 d3.json('/json/' + decodeURIComponent(get_query_param('key')[0]), function(error, json) {
     if (error) return console.error('error', error);
@@ -287,7 +293,7 @@ function scaled(name) {
     }
 }
 
-function createLine(d, currentField, xFunc) {
+function createLine(data, currentField, xFunc) {
     // percent 1 vs 0
     var runningSeq = [];
     var runningCount = 0;
@@ -307,7 +313,7 @@ function createLine(d, currentField, xFunc) {
         })
         .interpolate("basis");
 
-    return k(dataset)
+    return k(data)
 }
 
 function draw() {
@@ -629,6 +635,11 @@ function draw_metric_axes(svg, fieldName) {
         .call(yAxis);
 }
 
+function trim_by_pcap_secs(data) {
+    var domain = state.scales['pcap_secs'].domain();
+    return data.slice(binary_search_by_pcap_secs(data, domain[0]), binary_search_by_pcap_secs(data, domain[1]));
+}
+
 function zoom_to_domain(newDomain) {
     // update charts
     state.scales['pcap_secs'].domain(newDomain);
@@ -639,7 +650,7 @@ function zoom_to_domain(newDomain) {
     // todo: better way of calling this more generally to update x-axis scale?
     state.to_plot.forEach(function(d) {
         if (field_settings[d].value_type == 'boolean') {
-            d3.selectAll(".line_bottom_bool_" + d).attr("d", createLine(dataset, d, scaled('pcap_secs')))
+            d3.selectAll(".line_bottom_bool_" + d).attr("d", createLine(trim_by_pcap_secs(dataset), d, scaled('pcap_secs')))
         }
     })
 }
@@ -699,12 +710,6 @@ function draw_crosshairs(element) {
         .attr('dy', '-.5em');
 }
 
-function binary_search_by(field) {
-    return d3.bisector(function(d) {
-        return d[field]
-    }).left;
-}
-
 function find_packet(x, y, field, lock) {
     if (x < state.scales['pcap_secs'].range()[0] ||
         x > state.scales['pcap_secs'].range()[1] ||
@@ -718,7 +723,7 @@ function find_packet(x, y, field, lock) {
         search_in = stream2packetsDict[state.selected_stream].values;
     }
 
-    var idx = binary_search_by('pcap_secs')(search_in, pcap_secs, 0);
+    var idx = binary_search_by_pcap_secs(search_in, pcap_secs, 0);
     d = closest_to_y(search_in, idx, x, y, scaled(field), field);
 
     return d;
