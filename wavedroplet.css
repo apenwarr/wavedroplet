@@ -85,3 +85,13 @@
       fill: #141414;
       stroke: none;
     }
+
+    .background_box {
+      stroke: none;
+      fill: #FFf7ff;
+    }
+
+    .percent_area {
+      stroke: none;
+      fill: #291C5E;
+    }
