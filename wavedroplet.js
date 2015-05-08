@@ -293,7 +293,7 @@ function scaled(name) {
     }
 }
 
-function createLine(data, currentField, xFunc) {
+function boolean_percent_of_total_area_setup(data, currentField, xFunc) {
     // percent 1 vs 0
     var runningSeq = [];
     var runningCount = 0;
@@ -516,12 +516,16 @@ function visualize(field) {
 
 function visualize_boolean(field, svg) {
 
-    var boolean_boxes = svg.append('g').attr("class", 'boolean_boxes_' + field)
+    var boolean_boxes = svg.append('g').attr("class", 'boolean_boxes_' + field).attr("fill", "grey")
         // draw boolean boxes
-    stream2packetsArray.forEach(function(d) {
+        /*   stream2packetsArray.forEach(function(d) {
         draw_boolean_boxes_per_stream(field, d, stream2packetsDict, boolean_boxes)
     });
+*/
+    // rectangle view 
+    draw_boolean_boxes_by_dataset(field, dataset, boolean_boxes);
 
+    // area chart showing percent of last 20 that were "bad"
     svg.append("rect")
         .attr("class", "background_bool")
         .attr("width", dimensions.width.chart)
@@ -533,10 +537,31 @@ function visualize_boolean(field, svg) {
 
     svg.append("path")
         .attr("class", "line_bottom_bool_" + field)
-        .attr("d", createLine(dataset, field, scaled('pcap_secs')))
+        .attr("d", boolean_percent_of_total_area_setup(dataset, field, scaled('pcap_secs')))
         .style("stroke", "none")
         .style("fill", "#291C5E");
 
+}
+
+function draw_boolean_boxes_by_dataset(fieldName, data, svg) {
+    svg.selectAll('.bool_boxes_rect_' + fieldName)
+        .data(data, function(d) {
+            return d.pcap_secs
+        })
+        .enter()
+        .append('rect')
+        .attr('class', 'bool_boxes_rect_' + fieldName)
+        .attr('x', scaled('pcap_secs'))
+        .attr('y', function(d) {
+            if (d[fieldName] == 1) {
+                return 0
+            } else {
+                return dimensions.height.per_chart * .2
+            }
+        })
+        .attr('width', 2)
+        .attr('opacity', .5)
+        .attr('height', dimensions.height.per_chart * .18);
 }
 
 // visualization set up functions
@@ -645,12 +670,37 @@ function zoom_to_domain(newDomain) {
     state.scales['pcap_secs'].domain(newDomain);
     d3.selectAll(".axis.x.metric").call(pcapSecsAxis);
     d3.selectAll(".points").attr('cx', scaled('pcap_secs'))
-    d3.selectAll(".bool_boxes").attr('x', scaled('pcap_secs'))
 
     // todo: better way of calling this more generally to update x-axis scale?
-    state.to_plot.forEach(function(d) {
-        if (field_settings[d].value_type == 'boolean') {
-            d3.selectAll(".line_bottom_bool_" + d).attr("d", createLine(trim_by_pcap_secs(dataset), d, scaled('pcap_secs')))
+    state.to_plot.forEach(function(fieldName) {
+        if (field_settings[fieldName].value_type == 'boolean') {
+            var trimmed_data = trim_by_pcap_secs(dataset);
+            d3.selectAll(".line_bottom_bool_" + fieldName).attr("d", boolean_percent_of_total_area_setup(trimmed_data, fieldName, scaled('pcap_secs')));
+
+
+            var bool_boxes_current = d3.select(".boolean_boxes_" + fieldName).selectAll(".bool_boxes_rect_" + fieldName).data(trimmed_data, function(d) {
+                return d.pcap_secs
+            })
+
+            // fix alignment!
+            bool_boxes_current.enter()
+                .append('rect')
+                .attr('class', 'bool_boxes_rect_' + fieldName)
+                .attr('x', scaled('pcap_secs'))
+                .attr('y', function(d) {
+                    if (d[fieldName] == 1) {
+                        return 0
+                    } else {
+                        return dimensions.height.per_chart * .2
+                    }
+                })
+                .attr('width', 2)
+                .attr('opacity', .5)
+                .attr('height', dimensions.height.per_chart * .18)
+
+            bool_boxes_current.attr('x', scaled('pcap_secs'));
+
+            bool_boxes_current.exit().remove()
         }
     })
 }
@@ -777,6 +827,7 @@ function update_crosshairs(d, field) {
         reticle[r_field].select('.y')
             .attr('transform', 'translate(0,' + closest_y + ')');
 
+        // note - throws NaN errors when y is not a numeric value
         reticle[r_field].select('circle.y')
             .attr('transform',
                 'translate(' + closest_x + ',' + closest_y + ')');
