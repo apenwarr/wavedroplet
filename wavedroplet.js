@@ -1,5 +1,6 @@
 "use strict";
 
+// debugging
 var debug = false;
 
 function log(o) {
@@ -8,6 +9,7 @@ function log(o) {
     }
 }
 
+// find visible width/height 
 var w = window,
     d = document,
     e = d.documentElement,
@@ -15,6 +17,8 @@ var w = window,
 
 var total_width = w.innerWidth || e.clientWidth || g.clientWidth;
 var total_height = w.innerHeight || e.clientHeight || g.clientHeight;
+
+// set chart size dimensions
 var sidebar_width = 180;
 // set margin for set of charts
 var dimensions = {
@@ -27,17 +31,16 @@ var dimensions = {
         overview: 80,
         x_axis: 20,
         above_charts: 5,
-        below_charts: 30
+        below_charts: 30,
+        tooltip: 15,
     },
     width: {
         chart: 0,
         y_axis: 60
-    }
+    },
 }
 
-var tooltipLabelsHeight = 15; // height per line in detailed mouseover view
-var number_of_packets;
-
+// metric lists
 var availableMetrics = [
     "ta",
     "ra",
@@ -72,7 +75,7 @@ var selectableMetrics = [
     "bad"
 ];
 
-// define settings per viewable metric
+// settings per selectable metric
 var field_settings = {
     'pcap_secs': {
         'value_type': 'number',
@@ -112,22 +115,25 @@ var state = {
     // When not null, crosshairs will focus only on packets for this stream.
     selected_stream: null
 }
+
 var reticle = {}; // dict[field; crosshair]
 var histogramPacketNum = [] // array to be used to create overview histogram
-
-var pcapSecsAxis = d3.svg.axis()
-    .tickFormat(hourMinuteMilliseconds)
-    .orient('bottom')
-    .ticks(5);
+var number_of_packets;
 
 var dataset; // all packets, sorted by pcap_secs
 var stream2packetsDict = {};
 var stream2packetsArray = [];
 
+// pcap axis
+var pcapSecsAxis = d3.svg.axis()
+    .tickFormat(hourMinuteMilliseconds)
+    .orient('bottom')
+    .ticks(5);
+
 // set up brush and brushed function
 var brush = d3.svg.brush()
     .on("brushend", function() {
-        zoom_to_domain(brush.empty() ? state.scales['pcap_secs_fixed'].domain() : brush.extent())
+        update_pcaps_domain(brush.empty() ? state.scales['pcap_secs_fixed'].domain() : brush.extent())
     });
 
 // binary search function for pcap_secs
@@ -135,6 +141,13 @@ var binary_search_by_pcap_secs =
     d3.bisector(function(d) {
         return d.pcap_secs
     }).left
+
+// helper function for scales
+function scaled(name) {
+    return function(d) {
+        return state.scales[name](d[name]);
+    }
+}
 
 // get data & visualize
 d3.json('/json/' + decodeURIComponent(get_query_param('key')[0]), function(error, json) {
@@ -151,39 +164,6 @@ d3.json('/json/' + decodeURIComponent(get_query_param('key')[0]), function(error
     var end = new Date().getTime();
     log('Spent on visualization ' + ((end - begin) / 1000) + ' sec.');
 })
-
-function get_query_param(param) {
-    var urlKeyValuePairs = {}
-    window.location.href.split("#")[1].split("&").forEach(function(d) {
-        var m = d.split("=");
-        urlKeyValuePairs[m[0]] = m[1]
-    })
-    return urlKeyValuePairs[param].split(',')
-}
-
-function to_stream_key(d, aliases) {
-    return d['ta'].replace(/:/g, '') + '---' + d['ra'].replace(/:/g, '');
-}
-
-function to_visible_stream_key(d) {
-    return d.replace(/---/g, '→')
-}
-
-function to_css_stream_key(d) {
-    return d.replace(/→/g, '---')
-}
-
-function replace_address_with_alias(d, aliases) {
-    d['ta'] = aliases[d['ta']] || d['ta']
-    d['ra'] = aliases[d['ra']] || d['ra']
-}
-
-function complement_stream_id(key) {
-    // match any letter/number for aliases
-    var re = /(([a-z]|[A-Z]|[0-9])+)---(([a-z]|[A-Z]|[0-9])+)/
-    var z = key.match(re)
-    return z[3] + "---" + z[1]
-}
 
 function init(json) {
     // TODO(katepek): Should sanitize here? E.g., discard bad packets?
@@ -257,6 +237,39 @@ function init(json) {
     })
 }
 
+// helper functions for init
+function get_query_param(param) {
+    var urlKeyValuePairs = {}
+    window.location.href.split("#")[1].split("&").forEach(function(d) {
+        var m = d.split("=");
+        urlKeyValuePairs[m[0]] = m[1]
+    })
+    return urlKeyValuePairs[param].split(',')
+}
+
+function to_stream_key(d, aliases) {
+    return d['ta'].replace(/:/g, '') + '---' + d['ra'].replace(/:/g, '');
+}
+
+function to_visible_stream_key(d) {
+    return d.replace(/---/g, '→')
+}
+
+function to_css_stream_key(d) {
+    return d.replace(/→/g, '---')
+}
+
+function replace_address_with_alias(d, aliases) {
+    d['ta'] = aliases[d['ta']] || d['ta']
+    d['ra'] = aliases[d['ra']] || d['ra']
+}
+
+function complement_stream_id(key) {
+    // match any letter/number for aliases
+    var re = /(([a-z]|[A-Z]|[0-9])+)---(([a-z]|[A-Z]|[0-9])+)/
+    var z = key.match(re)
+    return z[3] + "---" + z[1]
+}
 
 function sanitize_dataset() {
     log('Before filtering: ' + dataset.length);
@@ -287,35 +300,6 @@ function add_scale(field, range) {
         .range(range);
 }
 
-function scaled(name) {
-    return function(d) {
-        return state.scales[name](d[name]);
-    }
-}
-
-function boolean_percent_of_total_area_setup(data, currentField, xFunc) {
-    // percent 1 vs 0
-    var runningSeq = [];
-    var runningCount = 0;
-    var rollingAverageLength = 20
-    var k = d3.svg.area()
-        .x(xFunc)
-        .y0(function(d) {
-            return dimensions.height.per_chart
-        })
-        .y1(function(d) {
-            if (runningSeq.length > rollingAverageLength) {
-                runningCount = runningCount - runningSeq.shift();
-            }
-            runningSeq.push(d[currentField]);
-            runningCount = runningCount + d[currentField];
-            return dimensions.height.per_chart * .45 * (1 - runningCount / rollingAverageLength) + dimensions.height.per_chart * .55;
-        })
-        .interpolate("basis");
-
-    return k(data)
-}
-
 function draw() {
     add_butter_bar();
 
@@ -327,7 +311,6 @@ function draw() {
 
     add_legend();
 }
-
 
 function add_overview() {
     var max = 0;
@@ -484,14 +467,14 @@ d3.select('#tooltip')
     .classed('hidden', true)
     .append("svg")
     .attr("width", sidebar_width - 10)
-    .attr("height", availableMetrics.length * tooltipLabelsHeight)
+    .attr("height", availableMetrics.length * dimensions.height.tooltip)
     .selectAll('.tooltipValues')
     .data(availableMetrics)
     .enter()
     .append("text")
     .attr("class", "tooltipValues")
     .attr("y", function(k, i) {
-        return i * tooltipLabelsHeight + 10
+        return i * dimensions.height.tooltip + 10
     });
 
 function visualize(field) {
@@ -514,12 +497,40 @@ function visualize(field) {
 
 }
 
+// helper functions for draw
+function boolean_percent_of_total_area_setup(data, currentField, xFunc) {
+    // percent 1 vs 0
+    var runningSeq = [];
+    var runningCount = 0;
+    var rollingAverageLength = 20
+    var k = d3.svg.area()
+        .x(xFunc)
+        .y0(function(d) {
+            return dimensions.height.per_chart
+        })
+        .y1(function(d) {
+            if (runningSeq.length > rollingAverageLength) {
+                runningCount = runningCount - runningSeq.shift();
+            }
+            runningSeq.push(d[currentField]);
+            runningCount = runningCount + d[currentField];
+            return dimensions.height.per_chart * .45 * (1 - runningCount / rollingAverageLength) + dimensions.height.per_chart * .55;
+        })
+        .interpolate("basis");
+
+    return k(data)
+}
+
 function visualize_boolean(field, svg) {
 
-    var boolean_boxes = svg.append('g').attr("class", 'boolean_boxes_' + field).attr("fill", "grey")
+    var boolean_boxes = svg.append('g').attr("class", 'boolean_boxes_' + field).attr("fill", "grey").attr("opacity", .5)
 
     // rectangle view 
-    draw_boolean_boxes_by_dataset(field, dataset, boolean_boxes);
+    enter_boolean_boxes_by_dataset(field,
+        boolean_boxes.selectAll('.bool_boxes_rect_' + field)
+                     .data(dataset, function(d) {
+                        return d.pcap_secs
+                     }));
 
     // area chart view
     draw_boolean_percent_chart(field, svg)
@@ -542,14 +553,9 @@ function draw_boolean_percent_chart(field, svg) {
         .attr("d", boolean_percent_of_total_area_setup(dataset, field, scaled('pcap_secs')));
 }
 
-function draw_boolean_boxes_by_dataset(fieldName, data, svg) {
-    svg.selectAll('.bool_boxes_rect_' + fieldName)
-        .data(data, function(d) {
-            return d.pcap_secs
-        })
-        .enter()
+function enter_boolean_boxes_by_dataset(fieldName, svg) { 
+    svg.enter()
         .append('rect')
-        .attr('class', 'bool_boxes_rect_' + fieldName)
         .attr('x', scaled('pcap_secs'))
         .attr('y', function(d) {
             if (d[fieldName] == 1) {
@@ -559,8 +565,9 @@ function draw_boolean_boxes_by_dataset(fieldName, data, svg) {
             }
         })
         .attr('width', 2)
-        .attr('opacity', .5)
-        .attr('height', dimensions.height.per_chart * .18);
+        .attr('height', dimensions.height.per_chart * .18)
+        .attr('class', 'bool_boxes_rect_' + fieldName);
+        
 }
 
 function visualize_numbers(field, svg) {
@@ -573,7 +580,6 @@ function visualize_numbers(field, svg) {
     stream2packetsArray.forEach(function(d) {
         draw_points_per_stream(field, d, stream2packetsDict, svg)
     });
-
     // x and y axis
     draw_metric_x_axis(svg, field);
     draw_metric_y_axis(svg, field);
@@ -632,7 +638,7 @@ function draw_metric_x_axis(svg, fieldName) {
             brush.extent(newDomain)
             d3.selectAll(".brush").call(brush)
 
-            zoom_to_domain(newDomain)
+            update_pcaps_domain(newDomain)
         })
         .attr('transform', 'translate(0,' + (dimensions.height.per_chart) + ')')
 
@@ -641,17 +647,11 @@ function draw_metric_x_axis(svg, fieldName) {
 
 }
 
-function trim_by_pcap_secs(data) {
-    var domain = state.scales['pcap_secs'].domain();
-    return data.slice(binary_search_by_pcap_secs(data, domain[0]), binary_search_by_pcap_secs(data, domain[1]));
-}
-
-function zoom_to_domain(newDomain) {
+function update_pcaps_domain(newDomain) {
     // update charts
     state.scales['pcap_secs'].domain(newDomain);
     d3.selectAll(".axis.x.metric").call(pcapSecsAxis);
     d3.selectAll(".points").attr('cx', scaled('pcap_secs'))
-
 
     // todo: better way of calling this more generally to update x-axis scale?
     state.to_plot.forEach(function(fieldName) {
@@ -659,35 +659,33 @@ function zoom_to_domain(newDomain) {
             var trimmed_data = trim_by_pcap_secs(dataset);
             d3.selectAll(".percent_area_chart_boolean_" + fieldName).attr("d", boolean_percent_of_total_area_setup(trimmed_data, fieldName, scaled('pcap_secs')));
 
-            var bool_boxes_current = d3.select(".boolean_boxes_" + fieldName).selectAll(".bool_boxes_rect_" + fieldName).data(trimmed_data, function(d) {
-                return d.pcap_secs
-            })
+            var bool_boxes_current = d3.select(".boolean_boxes_" + fieldName)
+                                       .selectAll(".bool_boxes_rect_" + fieldName)
+                                       .data(trimmed_data, function(d) {
+                                            return d.pcap_secs
+                                       })
+            // exit 
+            bool_boxes_current.exit().remove()
 
-            // fix alignment!
-            bool_boxes_current.enter()
-                .append('rect')
-                .attr('class', 'bool_boxes_rect_' + fieldName)
-                .attr('x', scaled('pcap_secs'))
-                .attr('y', function(d) {
-                    if (d[fieldName] == 1) {
-                        return 0
-                    } else {
-                        return dimensions.height.per_chart * .2
-                    }
-                })
-                .attr('width', 2)
-                .attr('opacity', .5)
-                .attr('height', dimensions.height.per_chart * .18)
-
+            // update
             bool_boxes_current.attr('x', scaled('pcap_secs'));
 
-            bool_boxes_current.exit().remove()
+            // enter
+            enter_boolean_boxes_by_dataset(fieldName, bool_boxes_current)
 
         }
         
     })
 }
 
+// helper functions for update
+function trim_by_pcap_secs(data) {
+    // slice dataset based on desired min/max pcap milliseconds
+    var domain = state.scales['pcap_secs'].domain();
+    return data.slice(binary_search_by_pcap_secs(data, domain[0]), binary_search_by_pcap_secs(data, domain[1]));
+}
+
+// helper functions for selection
 function draw_hidden_rect_for_mouseover(svg, fieldName) {
     svg.append('rect')
         .attr('width', dimensions.width.chart)
@@ -868,7 +866,7 @@ function select_stream(streamId) {
     }
 }
 
-// time formatting functions
+// helper functions for time formatting
 function hourMinuteMilliseconds(d) {
     return d3.time.format("%H:%M:%S")(new Date(d * 1000))
 }
