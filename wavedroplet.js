@@ -517,11 +517,7 @@ function visualize(field) {
 function visualize_boolean(field, svg) {
 
     var boolean_boxes = svg.append('g').attr("class", 'boolean_boxes_' + field).attr("fill", "grey")
-        // draw boolean boxes
-        /*   stream2packetsArray.forEach(function(d) {
-        draw_boolean_boxes_per_stream(field, d, stream2packetsDict, boolean_boxes)
-    });
-*/
+
     // rectangle view 
     draw_boolean_boxes_by_dataset(field, dataset, boolean_boxes);
 
@@ -671,12 +667,12 @@ function zoom_to_domain(newDomain) {
     d3.selectAll(".axis.x.metric").call(pcapSecsAxis);
     d3.selectAll(".points").attr('cx', scaled('pcap_secs'))
 
+
     // todo: better way of calling this more generally to update x-axis scale?
     state.to_plot.forEach(function(fieldName) {
         if (field_settings[fieldName].value_type == 'boolean') {
             var trimmed_data = trim_by_pcap_secs(dataset);
             d3.selectAll(".line_bottom_bool_" + fieldName).attr("d", boolean_percent_of_total_area_setup(trimmed_data, fieldName, scaled('pcap_secs')));
-
 
             var bool_boxes_current = d3.select(".boolean_boxes_" + fieldName).selectAll(".bool_boxes_rect_" + fieldName).data(trimmed_data, function(d) {
                 return d.pcap_secs
@@ -701,8 +697,12 @@ function zoom_to_domain(newDomain) {
             bool_boxes_current.attr('x', scaled('pcap_secs'));
 
             bool_boxes_current.exit().remove()
+
         }
+        
     })
+
+
 }
 
 function draw_hidden_rect_for_mouseover(svg, fieldName) {
