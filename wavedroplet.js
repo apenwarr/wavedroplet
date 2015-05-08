@@ -521,22 +521,25 @@ function visualize_boolean(field, svg) {
     // rectangle view 
     draw_boolean_boxes_by_dataset(field, dataset, boolean_boxes);
 
+    // area chart view
+    draw_boolean_percent_chart(field, svg)
+
+    // x and y axis
+    draw_metric_x_axis(svg, field);
+}
+
+function draw_boolean_percent_chart(field, svg) {
     // area chart showing percent of last 20 that were "bad"
     svg.append("rect")
-        .attr("class", "background_bool")
+        .attr("class", "background_box")
         .attr("width", dimensions.width.chart)
         .attr("height", dimensions.height.per_chart * .45)
         .attr("x", 0)
-        .attr("y", dimensions.height.per_chart * .55)
-        .style("stroke", "none")
-        .style("fill", "#FFf7ff");
+        .attr("y", dimensions.height.per_chart * .55);
 
     svg.append("path")
-        .attr("class", "line_bottom_bool_" + field)
-        .attr("d", boolean_percent_of_total_area_setup(dataset, field, scaled('pcap_secs')))
-        .style("stroke", "none")
-        .style("fill", "#291C5E");
-
+        .attr("class", "percent_area_chart_boolean_" + field + " percent_area")
+        .attr("d", boolean_percent_of_total_area_setup(dataset, field, scaled('pcap_secs')));
 }
 
 function draw_boolean_boxes_by_dataset(fieldName, data, svg) {
@@ -560,28 +563,6 @@ function draw_boolean_boxes_by_dataset(fieldName, data, svg) {
         .attr('height', dimensions.height.per_chart * .18);
 }
 
-// visualization set up functions
-function draw_boolean_boxes_per_stream(fieldName, streamId, packetsDictionary, svg) {
-    svg.append('g').attr("class", 'pcap_vs_' + fieldName + " stream_" + streamId + " metricChart").attr("fill", 'grey')
-        .selectAll('.bool_boxes')
-        .data(packetsDictionary[streamId].values)
-        .enter()
-        .append('rect')
-        .attr('class', 'bool_boxes')
-        .attr('x', scaled('pcap_secs'))
-        .attr('y', function(d) {
-            if (d[fieldName] == 1) {
-                return 0
-            } else {
-                return dimensions.height.per_chart * .2
-            }
-        })
-        .attr('width', 2)
-        .attr('opacity', .5)
-        .attr('height', dimensions.height.per_chart * .18);
-
-}
-
 function visualize_numbers(field, svg) {
     // set up crosshairs element
     reticle[field] = svg.append('g')
@@ -594,7 +575,8 @@ function visualize_numbers(field, svg) {
     });
 
     // x and y axis
-    draw_metric_axes(svg, field);
+    draw_metric_x_axis(svg, field);
+    draw_metric_y_axis(svg, field);
 
     // Add crosshairs
     draw_crosshairs(reticle[field]);
@@ -616,11 +598,26 @@ function draw_points_per_stream(fieldName, streamId, packetsDictionary, svg) {
         .attr('r', 2);
 }
 
-function draw_metric_axes(svg, fieldName) {
+function draw_metric_y_axis(svg, fieldName) {
     var yAxis = d3.svg.axis()
         .scale(state.scales[fieldName])
         .orient('right')
         .ticks(5);
+
+    // y axis
+    svg.append('g')
+        .attr('class', 'axis y')
+        .attr('transform', 'translate(' + (dimensions.width.chart) + ',0)')
+        .call(yAxis);
+}
+
+function draw_metric_x_axis(svg, fieldName) {
+    // title for plot
+    svg.append("text")
+        .attr('transform', 'translate(' + dimensions.width.chart / 2 + ',' + (dimensions.height.per_chart + dimensions.height.x_axis + dimensions.height.below_charts / 3) + ')')
+        .attr("class", "text-label")
+        .attr("text-anchor", "middle")
+        .text(fieldName);
 
     // x axis
     var xaxis = svg.append('g')
@@ -642,18 +639,6 @@ function draw_metric_axes(svg, fieldName) {
     xaxis.call(pcapSecsAxis);
     xaxis.append("rect").attr('height', dimensions.height.x_axis).attr('width', dimensions.width.chart).style('opacity', 0);
 
-    // title for plot
-    svg.append("text")
-        .attr('transform', 'translate(' + dimensions.width.chart / 2 + ',' + (dimensions.height.per_chart + dimensions.height.x_axis + dimensions.height.below_charts / 3) + ')')
-        .attr("class", "text-label")
-        .attr("text-anchor", "middle")
-        .text(fieldName);
-
-    // y axis
-    svg.append('g')
-        .attr('class', 'axis y')
-        .attr('transform', 'translate(' + (dimensions.width.chart) + ',0)')
-        .call(yAxis);
 }
 
 function trim_by_pcap_secs(data) {
@@ -672,7 +657,7 @@ function zoom_to_domain(newDomain) {
     state.to_plot.forEach(function(fieldName) {
         if (field_settings[fieldName].value_type == 'boolean') {
             var trimmed_data = trim_by_pcap_secs(dataset);
-            d3.selectAll(".line_bottom_bool_" + fieldName).attr("d", boolean_percent_of_total_area_setup(trimmed_data, fieldName, scaled('pcap_secs')));
+            d3.selectAll(".percent_area_chart_boolean_" + fieldName).attr("d", boolean_percent_of_total_area_setup(trimmed_data, fieldName, scaled('pcap_secs')));
 
             var bool_boxes_current = d3.select(".boolean_boxes_" + fieldName).selectAll(".bool_boxes_rect_" + fieldName).data(trimmed_data, function(d) {
                 return d.pcap_secs
@@ -701,8 +686,6 @@ function zoom_to_domain(newDomain) {
         }
         
     })
-
-
 }
 
 function draw_hidden_rect_for_mouseover(svg, fieldName) {
