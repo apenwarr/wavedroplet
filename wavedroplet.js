@@ -9,6 +9,8 @@ function log(o) {
     }
 }
 
+var toStream = false;
+
 // find visible width/height 
 var w = window,
     d = document,
@@ -528,9 +530,9 @@ function visualize_boolean(field, svg) {
     // rectangle view 
     enter_boolean_boxes_by_dataset(field,
         boolean_boxes.selectAll('.bool_boxes_rect_' + field)
-                     .data(dataset, function(d) {
-                        return d.pcap_secs
-                     }));
+        .data(dataset, function(d) {
+            return d.pcap_secs
+        }));
 
     // area chart view
     draw_boolean_percent_chart(field, svg)
@@ -553,7 +555,7 @@ function draw_boolean_percent_chart(field, svg) {
         .attr("d", boolean_percent_of_total_area_setup(dataset, field, scaled('pcap_secs')));
 }
 
-function enter_boolean_boxes_by_dataset(fieldName, svg) { 
+function enter_boolean_boxes_by_dataset(fieldName, svg) {
     svg.enter()
         .append('rect')
         .attr('x', scaled('pcap_secs'))
@@ -567,7 +569,7 @@ function enter_boolean_boxes_by_dataset(fieldName, svg) {
         .attr('width', 2)
         .attr('height', dimensions.height.per_chart * .18)
         .attr('class', 'bool_boxes_rect_' + fieldName);
-        
+
 }
 
 function visualize_numbers(field, svg) {
@@ -577,9 +579,13 @@ function visualize_numbers(field, svg) {
         .style('display', null);
 
     // draw points
-    stream2packetsArray.forEach(function(d) {
-        draw_points_per_stream(field, d, stream2packetsDict, svg)
-    });
+    if (toStream) {
+        stream2packetsArray.forEach(function(d) {
+            draw_points_per_stream(field, d, stream2packetsDict, svg)
+        });
+    } else {
+        draw_points(field, svg);
+    }
     // x and y axis
     draw_metric_x_axis(svg, field);
     draw_metric_y_axis(svg, field);
@@ -589,6 +595,20 @@ function visualize_numbers(field, svg) {
 
     // append the rectangle to capture mouse movements
     draw_hidden_rect_for_mouseover(svg, field)
+}
+
+function draw_points(fieldName, svg) {
+    svg.append('g').attr("class", 'pcap_vs_' + fieldName + " metricChart").attr("fill", 'grey')
+        .selectAll('.points')
+        .data(dataset, function(d) {
+            return d.pcap_secs
+        })
+        .enter()
+        .append('circle')
+        .attr('class', 'points')
+        .attr('cx', scaled('pcap_secs'))
+        .attr('cy', scaled(fieldName))
+        .attr('r', 2);
 }
 
 // visualization set up functions
@@ -651,20 +671,43 @@ function update_pcaps_domain(newDomain) {
     // update charts
     state.scales['pcap_secs'].domain(newDomain);
     d3.selectAll(".axis.x.metric").call(pcapSecsAxis);
-    d3.selectAll(".points").attr('cx', scaled('pcap_secs'))
+
+    if (toStream) {
+        d3.selectAll(".points").attr('cx', scaled('pcap_secs'))
+    }
 
     // todo: better way of calling this more generally to update x-axis scale?
+    var trimmed_data = trim_by_pcap_secs(dataset);
+
     state.to_plot.forEach(function(fieldName) {
+        if (!toStream & field_settings[fieldName].value_type == 'number') {
+            var points = d3.selectAll('.pcap_vs_' + fieldName).selectAll('.points')
+                .data(trimmed_data, function(d) {
+                    return d.pcap_secs
+                })
+
+            points.exit().remove();
+
+            points.attr('cx', scaled('pcap_secs'))
+
+            points.enter()
+                .append('circle')
+                .attr('class', 'points')
+                .attr('cx', scaled('pcap_secs'))
+                .attr('cy', scaled(fieldName))
+                .attr('r', 2);
+        }
+
         if (field_settings[fieldName].value_type == 'boolean') {
-            var trimmed_data = trim_by_pcap_secs(dataset);
-            d3.selectAll(".percent_area_chart_boolean_" + fieldName).attr("d", boolean_percent_of_total_area_setup(trimmed_data, fieldName, scaled('pcap_secs')));
+            d3.selectAll(".percent_area_chart_boolean_" + fieldName)
+                .attr("d", boolean_percent_of_total_area_setup(trimmed_data, fieldName, scaled('pcap_secs')));
 
             var bool_boxes_current = d3.select(".boolean_boxes_" + fieldName)
-                                       .selectAll(".bool_boxes_rect_" + fieldName)
-                                       .data(trimmed_data, function(d) {
-                                            return d.pcap_secs
-                                       })
-            // exit 
+                .selectAll(".bool_boxes_rect_" + fieldName)
+                .data(trimmed_data, function(d) {
+                    return d.pcap_secs
+                })
+                // exit 
             bool_boxes_current.exit().remove()
 
             // update
@@ -674,7 +717,7 @@ function update_pcaps_domain(newDomain) {
             enter_boolean_boxes_by_dataset(fieldName, bool_boxes_current)
 
         }
-        
+
     })
 }
 
