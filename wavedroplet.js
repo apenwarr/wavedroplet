@@ -237,6 +237,7 @@ function init(json) {
     })
 }
 
+
 // helper functions for init
 function get_query_param(param) {
     var urlKeyValuePairs = {}
@@ -271,20 +272,59 @@ function complement_stream_id(key) {
     return z[3] + "---" + z[1]
 }
 
+var excludedData = {
+    'no_pcap_value': {
+        count: 0
+    },
+    'non_positive_pcap_value': {
+        count: 0
+    },
+    'type_ack': {
+        count: 0
+    },
+    'null_ta': {
+        count: 0
+    },
+    'null_ra': {
+        count: 0
+    },
+    'missing_plottype': {
+        count: 0
+    }
+}
+
 function sanitize_dataset() {
+    var before = dataset.length;
     log('Before filtering: ' + dataset.length);
     dataset = dataset.filter(function(d) {
-        if (!d['pcap_secs']) return false;
-        if (d['pcap_secs'] <= 0) return false;
+        if (!d['pcap_secs']) {
+            excludedData.no_pcap_value.count++;
+        }
+        if (d['pcap_secs'] <= 0) {
+            excludedData.non_positive_pcap_value.count++;
+        }
 
-        if (!d['ta'] || !d['ra'])
+        // exclude ACK
+        if (d['typestr'] == '1D ACK') {
+            excludedData.type_ack.count++;
             return false;
+        }
+
+        // exclude null ta (remove this?)
+        if (!d['ta']) {
+            excludedData.null_ta.count++;
+            return false;
+        }
 
         for (var idx in state.to_plot) {
-            if (!d.hasOwnProperty(state.to_plot[idx])) return false;
+            if (!d.hasOwnProperty(state.to_plot[idx])) {
+                excludedData.missing_plottype.count++;
+            }
         }
         return true;
     });
+    log(excludedData)
+    log("Percent of packets removed: ", (before - dataset.length) / before)
     log('After filtering: ' + dataset.length);
 }
 
@@ -528,9 +568,9 @@ function visualize_boolean(field, svg) {
     // rectangle view 
     enter_boolean_boxes_by_dataset(field,
         boolean_boxes.selectAll('.bool_boxes_rect_' + field)
-                     .data(dataset, function(d) {
-                        return d.pcap_secs
-                     }));
+        .data(dataset, function(d) {
+            return d.pcap_secs
+        }));
 
     // area chart view
     draw_boolean_percent_chart(field, svg)
@@ -553,7 +593,7 @@ function draw_boolean_percent_chart(field, svg) {
         .attr("d", boolean_percent_of_total_area_setup(dataset, field, scaled('pcap_secs')));
 }
 
-function enter_boolean_boxes_by_dataset(fieldName, svg) { 
+function enter_boolean_boxes_by_dataset(fieldName, svg) {
     svg.enter()
         .append('rect')
         .attr('x', scaled('pcap_secs'))
@@ -567,7 +607,7 @@ function enter_boolean_boxes_by_dataset(fieldName, svg) {
         .attr('width', 2)
         .attr('height', dimensions.height.per_chart * .18)
         .attr('class', 'bool_boxes_rect_' + fieldName);
-        
+
 }
 
 function visualize_numbers(field, svg) {
@@ -660,11 +700,11 @@ function update_pcaps_domain(newDomain) {
             d3.selectAll(".percent_area_chart_boolean_" + fieldName).attr("d", boolean_percent_of_total_area_setup(trimmed_data, fieldName, scaled('pcap_secs')));
 
             var bool_boxes_current = d3.select(".boolean_boxes_" + fieldName)
-                                       .selectAll(".bool_boxes_rect_" + fieldName)
-                                       .data(trimmed_data, function(d) {
-                                            return d.pcap_secs
-                                       })
-            // exit 
+                .selectAll(".bool_boxes_rect_" + fieldName)
+                .data(trimmed_data, function(d) {
+                    return d.pcap_secs
+                })
+                // exit 
             bool_boxes_current.exit().remove()
 
             // update
@@ -674,7 +714,7 @@ function update_pcaps_domain(newDomain) {
             enter_boolean_boxes_by_dataset(fieldName, bool_boxes_current)
 
         }
-        
+
     })
 }
 
