@@ -273,20 +273,93 @@ function complement_stream_id(key) {
     return z[3] + "---" + z[1]
 }
 
+// helper functions for init
+function get_query_param(param) {
+    var urlKeyValuePairs = {}
+    window.location.href.split("#")[1].split("&").forEach(function(d) {
+        var m = d.split("=");
+        urlKeyValuePairs[m[0]] = m[1]
+    })
+    return urlKeyValuePairs[param].split(',')
+}
+
+function to_stream_key(d, aliases) {
+    return d['ta'].replace(/:/g, '') + '---' + d['ra'].replace(/:/g, '');
+}
+
+function to_visible_stream_key(d) {
+    return d.replace(/---/g, '→')
+}
+
+function to_css_stream_key(d) {
+    return d.replace(/→/g, '---')
+}
+
+function replace_address_with_alias(d, aliases) {
+    d['ta'] = aliases[d['ta']] || d['ta']
+    d['ra'] = aliases[d['ra']] || d['ra']
+}
+
+function complement_stream_id(key) {
+    // match any letter/number for aliases
+    var re = /(([a-z]|[A-Z]|[0-9])+)---(([a-z]|[A-Z]|[0-9])+)/
+    var z = key.match(re)
+    return z[3] + "---" + z[1]
+}
+
+var excludedData = {
+    'no_pcap_value': {
+        count: 0
+    },
+    'non_positive_pcap_value': {
+        count: 0
+    },
+    'type_ack': {
+        count: 0
+    },
+    'null_ta': {
+        count: 0
+    },
+    'null_ra': {
+        count: 0
+    },
+    'missing_plottype': {
+        count: 0
+    }
+}
+
 function sanitize_dataset() {
+    var before = dataset.length;
     log('Before filtering: ' + dataset.length);
     dataset = dataset.filter(function(d) {
-        if (!d['pcap_secs']) return false;
-        if (d['pcap_secs'] <= 0) return false;
+        if (!d['pcap_secs']) {
+            excludedData.no_pcap_value.count++;
+        }
+        if (d['pcap_secs'] <= 0) {
+            excludedData.non_positive_pcap_value.count++;
+        }
 
-        if (!d['ta'] || !d['ra'])
+        // exclude ACK
+        if (d['typestr'] == '1D ACK') {
+            excludedData.type_ack.count++;
             return false;
+        }
+
+        // exclude null ta (remove this?)
+        if (!d['ta']) {
+            excludedData.null_ta.count++;
+            return false;
+        }
 
         for (var idx in state.to_plot) {
-            if (!d.hasOwnProperty(state.to_plot[idx])) return false;
+            if (!d.hasOwnProperty(state.to_plot[idx])) {
+                excludedData.missing_plottype.count++;
+            }
         }
         return true;
     });
+    log(excludedData)
+    log("Percent of packets removed: ", (before - dataset.length) / before)
     log('After filtering: ' + dataset.length);
 }
 
