@@ -204,6 +204,10 @@ function init(json) {
     var packetSecs = []
 
     dataset.forEach(function(d) {
+        if (d.bad == 1) {
+            d.ta = 'bad_packet';
+            d.ra = 'bad_packet';
+        }
         // store time of packet
         packetSecs.push(d.pcap_secs)
 
@@ -823,6 +827,7 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
         .on('click', function() {
             d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], fieldName, false);
             if (!d) return;
+            console.log(d, d.streamId)
             select_stream(d.streamId);
             update_crosshairs(d, fieldName);
         })
@@ -964,6 +969,7 @@ function highlight_stream(streamId) {
 }
 
 function select_stream(streamId) {
+    console.log('selecting', streamID)
 
     // if new stream selected, update view & selected stream
     if (!state.selected_stream || streamId != state.selected_stream) {
