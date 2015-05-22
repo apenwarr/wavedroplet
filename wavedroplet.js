@@ -202,6 +202,10 @@ function init(json) {
     var packetSecs = []
 
     dataset.forEach(function(d) {
+        if (d.bad == 1) {
+            d.ta = 'bad_packet';
+            d.ra = 'bad_packet';
+        }
         // store time of packet
         packetSecs.push(d.pcap_secs)
 
