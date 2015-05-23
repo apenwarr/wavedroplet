@@ -9,8 +9,6 @@ function log(o) {
     }
 }
 
-var toStream = false;
-
 // find visible width/height 
 var w = window,
     d = document,
@@ -214,6 +212,8 @@ function init(json) {
         replace_address_with_alias(d, json.aliases);
         // track streams
         var streamId = to_stream_key(d, json.aliases);
+        d.ta = d.ta.replace(/:/gi, "")
+        d.ra = d.ra.replace(/:/gi, "")
         d.streamId = streamId;
         if (!stream2packetsDict[streamId]) {
             stream2packetsDict[streamId] = {
@@ -511,7 +511,7 @@ function add_legend() {
             var col = i % n_cols;
             var row = Math.floor(i / n_cols);
             legend.append('text')
-                .attr('class', 'legend stream_' + streamId)
+                .attr('class', 'legend stream_' + streamId + ' ta_' + streamId.split("---")[0] + ' ra_' + streamId.split("---")[1])
                 .attr('x', col * total_length)
                 .attr('y', (row + .5) * legend_line_height)
                 .text(to_visible_stream_key(streamId))
@@ -645,7 +645,21 @@ function enter_boolean_boxes_by_dataset(fieldName, svg) {
         })
         .attr('width', 2)
         .attr('height', dimensions.height.per_chart * .18)
-        .attr('class', 'bool_boxes_rect_' + fieldName);
+        .attr("class", function(d) {
+            if (!state.selected_stream || state.selected_stream == null) {
+                return 'bool_boxes_rect_' + fieldName + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId;
+            } else if (d.streamId == state.selected_stream) {
+                return 'bool_boxes_rect_' + fieldName + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + ' selected';
+            } else if (d.streamId == complement_stream_id(state.selected_stream)) {
+                return 'bool_boxes_rect_' + fieldName + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + ' selected';
+            } else if (d.ta == state.selected_stream.split("---")[0] || d.ra == state.selected_stream.split("---")[1]) {
+                return 'bool_boxes_rect_' + fieldName + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + ' selected_related';
+            } else if (d.ta == state.selected_stream.split("---")[1] || d.ra == state.selected_stream.split("---")[0]) {
+                return 'bool_boxes_rect_' + fieldName + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + ' selectedComplement_related';
+            } else {
+                return 'bool_boxes_rect_' + fieldName + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId;
+            }
+        })
 
 }
 
@@ -656,13 +670,8 @@ function visualize_numbers(field, svg) {
         .style('display', null);
 
     // draw points
-    if (toStream) {
-        stream2packetsArray.forEach(function(d) {
-            draw_points_per_stream(field, d, stream2packetsDict, svg)
-        });
-    } else {
-        draw_points(field, svg);
-    }
+    draw_points(field, svg);
+
     // x and y axis
     draw_metric_x_axis(svg, field);
     draw_metric_y_axis(svg, field);
@@ -682,20 +691,9 @@ function draw_points(fieldName, svg) {
         })
         .enter()
         .append('circle')
-        .attr('class', 'points')
-        .attr('cx', scaled('pcap_secs'))
-        .attr('cy', scaled(fieldName))
-        .attr('r', 2);
-}
-
-// visualization set up functions
-function draw_points_per_stream(fieldName, streamId, packetsDictionary, svg) {
-    svg.append('g').attr("class", 'pcap_vs_' + fieldName + " stream_" + streamId + " metricChart").attr("fill", 'grey')
-        .selectAll('.points')
-        .data(packetsDictionary[streamId].values)
-        .enter()
-        .append('circle')
-        .attr('class', 'points')
+        .attr('class', function(d) {
+            return 'points' + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId
+        })
         .attr('cx', scaled('pcap_secs'))
         .attr('cy', scaled(fieldName))
         .attr('r', 2);
@@ -749,15 +747,11 @@ function update_pcaps_domain(newDomain) {
     state.scales['pcap_secs'].domain(newDomain);
     d3.selectAll(".axis.x.metric").call(pcapSecsAxis);
 
-    if (toStream) {
-        d3.selectAll(".points").attr('cx', scaled('pcap_secs'))
-    }
-
     // todo: better way of calling this more generally to update x-axis scale?
     var trimmed_data = trim_by_pcap_secs(dataset);
 
     state.to_plot.forEach(function(fieldName) {
-        if (!toStream & field_settings[fieldName].value_type == 'number') {
+        if (field_settings[fieldName].value_type == 'number') {
             var points = d3.selectAll('.pcap_vs_' + fieldName).selectAll('.points')
                 .data(trimmed_data, function(d) {
                     return d.pcap_secs
@@ -769,9 +763,24 @@ function update_pcaps_domain(newDomain) {
 
             points.enter()
                 .append('circle')
-                .attr('class', 'points')
                 .attr('cx', scaled('pcap_secs'))
                 .attr('cy', scaled(fieldName))
+                .attr("class", function(d) {
+                    if (state.selected_stream == null) {
+                        console.log(d, "points")
+                    }
+                    if (d.streamId == state.selected_stream || state.selected_stream == null) {
+                        return 'points' + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + ' selected';
+                    } else if (d.streamId == complement_stream_id(state.selected_stream)) {
+                        return 'points' + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + ' selectedComplement';
+                    } else if (d.ta == state.selected_stream.split("---")[0] || d.ra == state.selected_stream.split("---")[1]) {
+                        return 'points' + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + ' selected_related';
+                    } else if (d.ta == state.selected_stream.split("---")[1] || d.ra == state.selected_stream.split("---")[0]) {
+                        return 'points' + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + ' selectedComplement_related';
+                    } else {
+                        return 'points' + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId;
+                    }
+                })
                 .attr('r', 2);
         }
 
@@ -827,7 +836,6 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
         .on('click', function() {
             d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], fieldName, false);
             if (!d) return;
-            console.log(d, d.streamId)
             select_stream(d.streamId);
             update_crosshairs(d, fieldName);
         })
@@ -951,31 +959,37 @@ function update_show_Tooltip(data) {
         });
 }
 
-function highlight_stream(streamId) {
+function highlight_stream(streamId, ta, ra) {
     d3.selectAll(".legend").classed("selected", false).classed("selectedComplement", false)
 
-    state.to_plot.forEach(function(d) {
-        d3.selectAll(".pcap_vs_" + d).classed("selected", false).classed("selectedComplement", false)
-    })
+    d3.selectAll(".selected").classed("selected", false)
+    d3.selectAll(".selectedComplement").classed("selectedComplement", false)
+    d3.selectAll(".selected_related").classed("selected_related", false)
+    d3.selectAll(".selected_related").classed("selectedComplement_related", false)
 
     // select these points
-    d3.selectAll('.stream_' + streamId)
-        .classed("selected", true)
-        .classed("selectedComplement", false);
+    d3.selectAll(".ta_" + streamId.split("---")[0])
+        .classed("selected_related", true);
+
+    d3.selectAll(".ra_" + streamId.split("---")[1])
+        .classed("selected_related", true);
 
     d3.selectAll('.stream_' + complement_stream_id(streamId))
-        .classed("selectedComplement", true)
-        .classed("selected", false);
+        .classed("selectedComplement", true);
+
+    d3.selectAll(".stream_" + streamId)
+        .classed("selected", true)
+        .classed("selected_related", false)
+        .classed("selected_related", false);
 }
 
 function select_stream(streamId) {
-    console.log('selecting', streamID)
-
     // if new stream selected, update view & selected stream
     if (!state.selected_stream || streamId != state.selected_stream) {
 
         // need to clear because from the legend the user can click on another stream even when a stream is "locked"
         // which is not possible from the points since you can only mouseover your state.selected_stream
+
         highlight_stream(streamId);
 
         state.selected_stream = streamId;

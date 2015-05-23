@@ -9,9 +9,18 @@
       fill: orange;
     }
 
+    .selected_related {
+      fill: #ff8f8f;
+    }
+
     .selectedComplement {
       font-weight: bold;
       fill: #0D6AEB;
+    }
+
+    .selectedComplement_related {
+      font-weight: bold;
+      fill: #78a8eb;
     }
 
     .axis path,
