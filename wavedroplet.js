@@ -113,7 +113,12 @@ var state = {
     to_plot: [],
     scales: [],
     // When not null, crosshairs will focus only on packets for this stream.
-    selected_stream: null
+    selected_data: {
+        stream: null,
+        access: null,
+        station: null,
+        //   direction: null,
+    }
 }
 
 var reticle = {}; // dict[field; crosshair]
@@ -214,6 +219,17 @@ function init(json) {
         var streamId = to_stream_key(d, json.aliases);
         d.ta = d.ta.replace(/:/gi, "")
         d.ra = d.ra.replace(/:/gi, "")
+
+        if (d.dsmode == 1) {
+            d.access = d.ra;
+            d.station = d.ta;
+        } else {
+            // treat 3 as if it were 2, since bad packets
+            // treat 0 as if it were 2, since ta must be access point
+            d.access = d.ta;
+            d.station = d.ra;
+        }
+
         d.streamId = streamId;
         if (!stream2packetsDict[streamId]) {
             stream2packetsDict[streamId] = {
@@ -516,7 +532,7 @@ function add_legend() {
                 .attr('y', (row + .5) * legend_line_height)
                 .text(to_visible_stream_key(streamId))
                 .on('click', function() {
-                    select_stream(to_css_stream_key(this.textContent));
+                    console.log(this)
                 });
         } else {
             break;
@@ -646,22 +662,35 @@ function enter_boolean_boxes_by_dataset(fieldName, svg) {
         .attr('width', 2)
         .attr('height', dimensions.height.per_chart * .18)
         .attr("class", function(d) {
-            if (!state.selected_stream || state.selected_stream == null) {
-                return 'bool_boxes_rect_' + fieldName + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId;
-            } else if (d.streamId == state.selected_stream) {
-                return 'bool_boxes_rect_' + fieldName + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + ' selected';
-            } else if (d.streamId == complement_stream_id(state.selected_stream)) {
-                return 'bool_boxes_rect_' + fieldName + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + ' selected';
-            } else if (d.ta == state.selected_stream.split("---")[0] || d.ra == state.selected_stream.split("---")[1]) {
-                return 'bool_boxes_rect_' + fieldName + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + ' selected_related';
-            } else if (d.ta == state.selected_stream.split("---")[1] || d.ra == state.selected_stream.split("---")[0]) {
-                return 'bool_boxes_rect_' + fieldName + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + ' selectedComplement_related';
-            } else {
-                return 'bool_boxes_rect_' + fieldName + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId;
-            }
+            return 'bool_boxes_rect_' + fieldName + " " + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d);
         })
+}
+
+function determine_selected_class(d) {
+    if (!state.selected_data.stream || state.selected_data.stream == null) {
+        return "";
+    } else if (d.dsmode == 1) {
+        if (state.selected_data.stream == d.streamId) {
+            return 'selected_upstream';
+        } else if (state.selected_data.access == d.ta && state.selected_data.station == d.ra) {
+            return 'selected_downstream';
+        } else if (state.selected_data.station == d.ta || state.selected_data.access == d.ra) {
+            return 'selected_partialMatch_upstream';
+        }
+    } else {
+        if (state.selected_data.stream == d.streamId) {
+            return 'selected_downstream';
+        } else if (state.selected_data.station == d.ra && state.selected_data.access == d.ta) {
+            return 'selected_upstream';
+        } else if (state.selected_data.access == d.ta || state.selected_data.station == d.ra) {
+            return 'selected_partialMatch_downstream';
+        } else {
+            return "";
+        }
+    }
 
 }
+
 
 function visualize_numbers(field, svg) {
     // set up crosshairs element
@@ -696,7 +725,7 @@ function draw_points(fieldName, svg) {
         })
         .attr('cx', scaled('pcap_secs'))
         .attr('cy', scaled(fieldName))
-        .attr('r', 2);
+        .attr('r', 1.5);
 }
 
 function draw_metric_y_axis(svg, fieldName) {
@@ -766,20 +795,7 @@ function update_pcaps_domain(newDomain) {
                 .attr('cx', scaled('pcap_secs'))
                 .attr('cy', scaled(fieldName))
                 .attr("class", function(d) {
-                    if (state.selected_stream == null) {
-                        console.log(d, "points")
-                    }
-                    if (d.streamId == state.selected_stream || state.selected_stream == null) {
-                        return 'points' + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + ' selected';
-                    } else if (d.streamId == complement_stream_id(state.selected_stream)) {
-                        return 'points' + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + ' selectedComplement';
-                    } else if (d.ta == state.selected_stream.split("---")[0] || d.ra == state.selected_stream.split("---")[1]) {
-                        return 'points' + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + ' selected_related';
-                    } else if (d.ta == state.selected_stream.split("---")[1] || d.ra == state.selected_stream.split("---")[0]) {
-                        return 'points' + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + ' selectedComplement_related';
-                    } else {
-                        return 'points' + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId;
-                    }
+                    return 'points ' + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d)
                 })
                 .attr('r', 2);
         }
@@ -836,12 +852,12 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
         .on('click', function() {
             d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], fieldName, false);
             if (!d) return;
-            select_stream(d.streamId);
+            select_stream(d);
             update_crosshairs(d, fieldName);
         })
         .on('mousemove', function() {
             d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], fieldName, true);
-            //      if (!state.selected_stream) {
+            //      if (!state.selected_data.stream) {
             //          // do nothing
             //      }
             if (!d) return;
@@ -879,8 +895,8 @@ function find_packet(x, y, field, lock) {
     var pcap_secs = state.scales['pcap_secs'].invert(x);
     var search_in = dataset;
 
-    if (state.selected_stream && lock) {
-        search_in = stream2packetsDict[state.selected_stream].values;
+    if (state.selected_data.stream && lock) {
+        search_in = stream2packetsDict[state.selected_data.stream].values;
     }
 
     var idx = binary_search_by_pcap_secs(search_in, pcap_secs, 0);
@@ -959,45 +975,56 @@ function update_show_Tooltip(data) {
         });
 }
 
-function highlight_stream(streamId, ta, ra) {
-    d3.selectAll(".legend").classed("selected", false).classed("selectedComplement", false)
+function highlight_stream(d) {
+    d3.selectAll(".legend").classed("selected_downstream", false).classed("selected_upstream", false)
 
-    d3.selectAll(".selected").classed("selected", false)
-    d3.selectAll(".selectedComplement").classed("selectedComplement", false)
-    d3.selectAll(".selected_related").classed("selected_related", false)
-    d3.selectAll(".selected_related").classed("selectedComplement_related", false)
+    // to do - limit these?
+    d3.selectAll(".selected_downstream").classed("selected_downstream", false)
+    d3.selectAll(".selected_upstream").classed("selected_upstream", false)
+    d3.selectAll(".selected_partialMatch_downstream").classed("selected_partialMatch_downstream", false)
+    d3.selectAll(".selected_partialMatch_upstream").classed("selected_partialMatch_upstream", false)
 
-    // select these points
-    d3.selectAll(".ta_" + streamId.split("---")[0])
-        .classed("selected_related", true);
+    if (d.dsmode == 1) {
 
-    d3.selectAll(".ra_" + streamId.split("---")[1])
-        .classed("selected_related", true);
+        d3.selectAll(".stream_" + d.streamId).classed("selected_upstream", true)
+        d3.selectAll(".stream_" + complement_stream_id(d.streamId)).classed("selected_downstream", true)
+        d3.selectAll(".ta_" + d.ta).classed("selected_partialMatch_upstream", true);
+        d3.selectAll(".ra_" + d.ra).classed("selected_partialMatch_upstream", true);
 
-    d3.selectAll('.stream_' + complement_stream_id(streamId))
-        .classed("selectedComplement", true);
+    } else {
+        d3.selectAll(".stream_" + d.streamId).classed("selected_downstream", true)
+        d3.selectAll(".stream_" + complement_stream_id(d.streamId)).classed("selected_upstream", true)
+        d3.selectAll(".ta_" + d.ta).classed("selected_partialMatch_downstream", true)
+        d3.selectAll(".ra_" + d.ra).classed("selected_partialMatch_downstream", true)
+    }
 
-    d3.selectAll(".stream_" + streamId)
-        .classed("selected", true)
-        .classed("selected_related", false)
-        .classed("selected_related", false);
 }
 
-function select_stream(streamId) {
+function select_stream(d) {
     // if new stream selected, update view & selected stream
-    if (!state.selected_stream || streamId != state.selected_stream) {
+    if (!state.selected_data.stream || d.streamId != state.selected_data.stream) {
 
         // need to clear because from the legend the user can click on another stream even when a stream is "locked"
-        // which is not possible from the points since you can only mouseover your state.selected_stream
+        // which is not possible from the points since you can only mouseover your state.selected_data.stream
 
-        highlight_stream(streamId);
-
-        state.selected_stream = streamId;
-        butter_bar('Locked to: ' + to_visible_stream_key(streamId));
+        state.selected_data.stream = d.streamId;
+        if (d.dsmode == 1) {
+            state.selected_data.access = d.ta;
+            state.selected_data.station = d.ra;
+        } else {
+            state.selected_data.access = d.ra;
+            state.selected_data.station = d.ta;
+        }
+        highlight_stream(d);
+        butter_bar('Locked to: ' + to_visible_stream_key(d.streamId));
     } else {
-        d3.selectAll(".selected").classed("selected", false);
-        d3.selectAll(".selectedComplement").classed("selectedComplement", false);
-        state.selected_stream = null;
+        d3.selectAll(".selected_downstream").classed("selected_downstream", false);
+        d3.selectAll(".selected_upstream").classed("selected_upstream", false);
+        d3.selectAll(".selected_partialMatch_downstream").classed("selected_partialMatch_downstream", false);
+        d3.selectAll(".selected_partialMatch_upstream").classed("selected_partialMatch_upstream", false);
+        state.selected_data.stream = null;
+        state.selected_data.access = null;
+        state.selected_data.station = null;
         butter_bar('Unlocked')
     }
 }

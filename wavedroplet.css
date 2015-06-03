@@ -4,23 +4,35 @@
       text-anchor: left;
     }
 
-    .selected {
+    .selected_partialMatch_downstream {
+     fill: #ffcc6e;
+    }
+
+    .selected_partialMatch_upstream {
       font-weight: bold;
-      fill: orange;
+      fill: #78a8eb;
     }
 
-    .selected_related {
-      fill: #ff8f8f;
+    .selected_downstream {
+      font-weight: bold;
+      fill: #e08900;
     }
 
-    .selectedComplement {
+
+    circle.selected_downstream {
+      stroke: #e08900;
+      stroke-width: 2px;
+    }
+
+
+    .selected_upstream {
       font-weight: bold;
       fill: #0D6AEB;
     }
 
-    .selectedComplement_related {
-      font-weight: bold;
-      fill: #78a8eb;
+    circle.selected_upstream {
+      stroke: #0D6AEB;
+      stroke-width: 2px;
     }
 
     .axis path,
