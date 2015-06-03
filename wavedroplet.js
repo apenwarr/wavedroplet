@@ -542,7 +542,7 @@ function add_legend() {
 
 function butter_bar(text) {
     d3.select('text#butter_bar_msg')
-        .style('opacity', 1)
+    .style('opacity', 1)
         .text(text);
     d3.select('rect#butter_bar_box')
         .style('opacity', 1)
@@ -618,7 +618,8 @@ function boolean_percent_of_total_area_setup(data, currentField, xFunc) {
 
 function visualize_boolean(field, svg) {
 
-    var boolean_boxes = svg.append('g').attr("class", 'boolean_boxes_' + field).attr("fill", "grey").attr("opacity", .5)
+    var boolean_boxes = svg.append('g').attr("class", 'boolean_boxes_' + field).attr("fill", "grey")
+        //.attr("opacity", .5)
 
     // rectangle view 
     enter_boolean_boxes_by_dataset(field,
