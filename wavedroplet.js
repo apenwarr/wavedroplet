@@ -518,6 +518,7 @@ function add_legend() {
     var total_length = key_length;
     var n_cols = Math.floor(total_width / total_length);
 
+    // fix this so that I still have access to more data about the stream (upstream/downstream in particular)
     for (var i in stream2packetsArray) {
         var streamId = stream2packetsArray[i];
         var count = stream2packetsDict[streamId].values.length;
@@ -542,7 +543,7 @@ function add_legend() {
 
 function butter_bar(text) {
     d3.select('text#butter_bar_msg')
-    .style('opacity', 1)
+        .style('opacity', 1)
         .text(text);
     d3.select('rect#butter_bar_box')
         .style('opacity', 1)
