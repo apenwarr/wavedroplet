@@ -522,18 +522,39 @@ function add_legend() {
     for (var i in stream2packetsArray) {
         var streamId = stream2packetsArray[i];
         var count = stream2packetsDict[streamId].values.length;
+        var dsmode = [
+            [],
+            [],
+            [],
+            []
+        ]
+        stream2packetsDict[streamId].values.forEach(function(d, i) {
+            if (dsmode[d.dsmode].indexOf(d.typestr) == -1) {
+                dsmode[d.dsmode].push(d.typestr)
+            }
+        })
+        stream2packetsDict[streamId].dsmode = 2;
+        if (dsmode[1].length != 0) {
+            stream2packetsDict[streamId].dsmode = 1;
+        }
         var legend_line_height = 30;
         // only show on legend if more than 1% belong to this stream
         if (count > number_of_packets * .01) {
             var col = i % n_cols;
             var row = Math.floor(i / n_cols);
             legend.append('text')
-                .attr('class', 'legend stream_' + streamId + ' ta_' + streamId.split("---")[0] + ' ra_' + streamId.split("---")[1])
+                .attr('class', 'legend stream_' + streamId + ' ta_' + streamId.split("---")[0] + ' ra_' + streamId.split("---")[1] + ' dsmode_' + stream2packetsDict[streamId].dsmode)
                 .attr('x', col * total_length)
                 .attr('y', (row + .5) * legend_line_height)
                 .text(to_visible_stream_key(streamId))
                 .on('click', function() {
-                    console.log(this)
+                    var streamId = to_css_stream_key(this.textContent);
+                    highlight_stream({
+                        'streamId': streamId,
+                        'ta': streamId.split("---")[0],
+                        'ra': streamId.split("---")[1],
+                        'dsmode': stream2packetsDict[streamId].dsmode
+                    })
                 });
         } else {
             break;
