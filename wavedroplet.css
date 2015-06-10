@@ -3,39 +3,6 @@
       font-size: 14px;
       text-anchor: left;
     }
-/*
-    .selected_partialMatch_downstream {
-     fill: #ffcc6e;
-    }
-
-    .selected_partialMatch_upstream {
-      font-weight: bold;
-      fill: #78a8eb;
-    }
-
-    .selected_downstream {
-      font-weight: bold;
-      fill: #e08900;
-    }
-
-
-    circle.selected_downstream {
-      stroke: #e08900;
-      stroke-width: 2px;
-    }
-
-
-    .selected_upstream {
-      font-weight: bold;
-      fill: #0D6AEB;
-    }
-
-    circle.selected_upstream {
-      stroke: #0D6AEB;
-      stroke-width: 2px;
-    }
-
-*/
 
     .selected_partialMatch_upstream {
      fill: #ffcc6e;

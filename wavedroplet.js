@@ -33,6 +33,8 @@ var dimensions = {
         above_charts: 5,
         below_charts: 30,
         tooltip: 15,
+        bar_factor_unselected: .12,
+        bar_factor_selected: .18
     },
     width: {
         chart: 0,
@@ -528,11 +530,15 @@ function add_legend() {
             [],
             []
         ]
+
+        // find types associated with each mode
         stream2packetsDict[streamId].values.forEach(function(d, i) {
             if (dsmode[d.dsmode].indexOf(d.typestr) == -1) {
                 dsmode[d.dsmode].push(d.typestr)
             }
         })
+
+        // label as dsmode 2 or 1: 2 by default, 1 if any of the packets have a dsmode of 1
         stream2packetsDict[streamId].dsmode = 2;
         if (dsmode[1].length != 0) {
             stream2packetsDict[streamId].dsmode = 1;
@@ -658,13 +664,14 @@ function visualize_boolean(field, svg) {
 }
 
 function draw_boolean_percent_chart(field, svg) {
+
     // area chart showing percent of last 20 that were "bad"
     svg.append("rect")
         .attr("class", "background_box")
         .attr("width", dimensions.width.chart)
         .attr("height", dimensions.height.per_chart * .45)
         .attr("x", 0)
-        .attr("y", dimensions.height.per_chart * .55);
+        .attr("y", dimensions.height.per_chart * .55)
 
     svg.append("path")
         .attr("class", "percent_area_chart_boolean_" + field + " percent_area")
@@ -672,6 +679,7 @@ function draw_boolean_percent_chart(field, svg) {
 }
 
 function enter_boolean_boxes_by_dataset(fieldName, svg) {
+
     svg.enter()
         .append('rect')
         .attr('x', scaled('pcap_secs'))
@@ -683,9 +691,18 @@ function enter_boolean_boxes_by_dataset(fieldName, svg) {
             }
         })
         .attr('width', 2)
-        .attr('height', dimensions.height.per_chart * .18)
+        .attr('height', function(d) {
+            if (determine_selected_class(d) == "") {
+                return dimensions.height.per_chart * dimensions.height.bar_factor_unselected
+            } else {
+                return dimensions.height.per_chart * dimensions.height.bar_factor_selected
+            }
+        })
         .attr("class", function(d) {
             return 'bool_boxes_rect_' + fieldName + " " + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d);
+        })
+        .on("click", function(d) {
+            highlight_stream(d)
         })
 }
 
@@ -1002,23 +1019,23 @@ function highlight_stream(d) {
     d3.selectAll(".legend").classed("selected_downstream", false).classed("selected_upstream", false)
 
     // to do - limit these?
-    d3.selectAll(".selected_downstream").classed("selected_downstream", false)
-    d3.selectAll(".selected_upstream").classed("selected_upstream", false)
-    d3.selectAll(".selected_partialMatch_downstream").classed("selected_partialMatch_downstream", false)
-    d3.selectAll(".selected_partialMatch_upstream").classed("selected_partialMatch_upstream", false)
+    d3.selectAll(".selected_downstream").classed("selected_downstream", false).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_unselected)
+    d3.selectAll(".selected_upstream").classed("selected_upstream", false).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_unselected)
+    d3.selectAll(".selected_partialMatch_downstream").classed("selected_partialMatch_downstream", false).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_unselected)
+    d3.selectAll(".selected_partialMatch_upstream").classed("selected_partialMatch_upstream", false).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_unselected)
 
     if (d.dsmode == 1) {
 
-        d3.selectAll(".stream_" + d.streamId).classed("selected_upstream", true)
-        d3.selectAll(".stream_" + complement_stream_id(d.streamId)).classed("selected_downstream", true)
-        d3.selectAll(".ta_" + d.ta).classed("selected_partialMatch_upstream", true);
-        d3.selectAll(".ra_" + d.ra).classed("selected_partialMatch_upstream", true);
+        d3.selectAll(".stream_" + d.streamId).classed("selected_upstream", true).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_selected)
+        d3.selectAll(".stream_" + complement_stream_id(d.streamId)).classed("selected_downstream", true).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_selected)
+        d3.selectAll(".ta_" + d.ta).classed("selected_partialMatch_upstream", true).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_selected);
+        d3.selectAll(".ra_" + d.ra).classed("selected_partialMatch_upstream", true).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_selected);
 
     } else {
-        d3.selectAll(".stream_" + d.streamId).classed("selected_downstream", true)
-        d3.selectAll(".stream_" + complement_stream_id(d.streamId)).classed("selected_upstream", true)
-        d3.selectAll(".ta_" + d.ta).classed("selected_partialMatch_downstream", true)
-        d3.selectAll(".ra_" + d.ra).classed("selected_partialMatch_downstream", true)
+        d3.selectAll(".stream_" + d.streamId).classed("selected_downstream", true).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_selected)
+        d3.selectAll(".stream_" + complement_stream_id(d.streamId)).classed("selected_upstream", true).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_selected)
+        d3.selectAll(".ta_" + d.ta).classed("selected_partialMatch_downstream", true).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_selected)
+        d3.selectAll(".ra_" + d.ra).classed("selected_partialMatch_downstream", true).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_selected)
     }
 
 }
