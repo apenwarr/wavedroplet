@@ -520,7 +520,6 @@ function add_legend() {
     var total_length = key_length;
     var n_cols = Math.floor(total_width / total_length);
 
-    // fix this so that I still have access to more data about the stream (upstream/downstream in particular)
     for (var i in stream2packetsArray) {
         var streamId = stream2packetsArray[i];
         var count = stream2packetsDict[streamId].values.length;
@@ -647,7 +646,6 @@ function boolean_percent_of_total_area_setup(data, currentField, xFunc) {
 function visualize_boolean(field, svg) {
 
     var boolean_boxes = svg.append('g').attr("class", 'boolean_boxes_' + field).attr("fill", "grey")
-        //.attr("opacity", .5)
 
     // rectangle view 
     enter_boolean_boxes_by_dataset(field,
