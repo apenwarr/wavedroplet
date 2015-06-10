@@ -4,14 +4,35 @@
       text-anchor: left;
     }
 
-    .selected {
-      font-weight: bold;
-      fill: orange;
+    .selected_partialMatch_upstream {
+     fill: #ffcc6e;
     }
 
-    .selectedComplement {
+    .selected_partialMatch_downstream {
+      font-weight: bold;
+      fill: #78a8eb;
+    }
+
+    .selected_upstream {
+      font-weight: bold;
+      fill: #e08900;
+    }
+
+
+    circle.selected_upstream {
+      stroke: #e08900;
+      stroke-width: 2px;
+    }
+
+
+    .selected_downstream {
       font-weight: bold;
       fill: #0D6AEB;
+    }
+
+    circle.selected_downstream {
+      stroke: #0D6AEB;
+      stroke-width: 2px;
     }
 
     .axis path,
