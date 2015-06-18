@@ -18,7 +18,6 @@
       fill: #e08900;
     }
 
-
     circle.selected_upstream {
       stroke: #e08900;
       stroke-width: 2px;
@@ -115,4 +114,19 @@
     .percent_area {
       stroke: none;
       fill: #291C5E;
+    }
+
+    .percent_area_chart_boolean_retry {
+      stroke: black;
+      fill: none;
+    }
+
+    .percent_area_chart_boolean_bad {
+      stroke: green;
+      fill: none;
+    }
+
+    .bad {
+      fill: #890000;
+      stroke: #890000;
     }

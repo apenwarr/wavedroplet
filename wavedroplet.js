@@ -33,8 +33,8 @@ var dimensions = {
         above_charts: 5,
         below_charts: 30,
         tooltip: 15,
-        bar_factor_unselected: .12,
-        bar_factor_selected: .18
+        bar_factor_unselected: .10,
+        bar_factor_selected: .15
     },
     width: {
         chart: 0,
@@ -91,11 +91,15 @@ var field_settings = {
         'value_type': 'number',
         'scale_type': 'linear',
     },
-    'bad': {
-        'value_type': 'boolean',
+    'retry-bad': {
+        'value_type': 'retrybad',
         'scale_type': 'linear'
     },
     'retry': {
+        'value_type': 'boolean',
+        'scale_type': 'linear'
+    },
+    'bad': {
         'value_type': 'boolean',
         'scale_type': 'linear'
     }
@@ -615,6 +619,8 @@ function visualize(field) {
         visualize_numbers(field, mainChart)
     } else if (field_settings[field].value_type == 'boolean') {
         visualize_boolean(field, mainChart);
+    } else if (field_settings[field].value_type == 'retrybad') {
+        visualize_retrybad(mainChart);
     }
 
 }
@@ -655,10 +661,27 @@ function visualize_boolean(field, svg) {
         }));
 
     // area chart view
-    draw_boolean_percent_chart(field, svg)
+    draw_boolean_percent_chart(field, svg);
 
     // x and y axis
     draw_metric_x_axis(svg, field);
+}
+
+function visualize_retrybad(svg) {
+    var boolean_boxes = svg.append('g').attr("class", 'boolean_boxes_retry-bad').attr("fill", "grey")
+
+    // box charts
+    enter_retrybad_boxes_by_dataset(
+        boolean_boxes.selectAll('.bool_boxes_rect_retry-bad')
+        .data(dataset, function(d) {
+            return d.pcap_secs
+        }));
+
+    // area chart view
+    draw_retrybad_percent_chart(svg);
+
+    // x axis
+    draw_metric_x_axis(svg, 'retry-bad');
 }
 
 function draw_boolean_percent_chart(field, svg) {
@@ -674,6 +697,33 @@ function draw_boolean_percent_chart(field, svg) {
     svg.append("path")
         .attr("class", "percent_area_chart_boolean_" + field + " percent_area")
         .attr("d", boolean_percent_of_total_area_setup(dataset, field, scaled('pcap_secs')));
+}
+
+function draw_retrybad_percent_chart(svg) {
+    // area chart showing percent of last 20 that were "bad"
+    svg.append("rect")
+        .attr("class", "background_box")
+        .attr("width", dimensions.width.chart)
+        .attr("height", dimensions.height.per_chart * .45)
+        .attr("x", 0)
+        .attr("y", dimensions.height.per_chart * .55)
+
+    // data is dataset, scaled('pcap_secs') for y axis
+
+    // goal #1 - setup stack
+    var stack = d3.layout.stack()(["retry", "bad"].map(function(type) {
+        return dataset.map(function(d) {
+            return {
+                x: scaled('pcap_secs')(d),
+                y: +d[type]
+            };
+        });
+    }));
+
+    console.log(stack)
+
+    // #3 - combine stack and data, and use in d3 call
+
 }
 
 function enter_boolean_boxes_by_dataset(fieldName, svg) {
@@ -704,8 +754,40 @@ function enter_boolean_boxes_by_dataset(fieldName, svg) {
         })
 }
 
+function enter_retrybad_boxes_by_dataset(svg) {
+
+    svg.enter()
+        .append('rect')
+        .attr('x', scaled('pcap_secs'))
+        .attr('y', function(d) {
+            if (d['bad'] == 1) {
+                return 0
+            } else if (d['retry'] == 1) {
+                return dimensions.height.per_chart * .16
+            } else {
+                return dimensions.height.per_chart * .32
+            }
+        })
+        .attr('width', 1)
+        .attr('height', function(d) {
+            if (determine_selected_class(d) == "") {
+                return dimensions.height.per_chart * dimensions.height.bar_factor_unselected
+            } else {
+                return dimensions.height.per_chart * dimensions.height.bar_factor_selected
+            }
+        })
+        .attr("class", function(d) {
+            return 'bool_boxes_rect_retry-bad' + " " + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d);
+        })
+        .on("click", function(d) {
+            highlight_stream(d)
+        })
+}
+
 function determine_selected_class(d) {
-    if (!state.selected_data.stream || state.selected_data.stream == null) {
+    if (d.bad == 1) {
+        return 'bad'
+    } else if (!state.selected_data.stream || state.selected_data.stream == null) {
         return "";
     } else if (d.dsmode == 1) {
         if (state.selected_data.stream == d.streamId) {
@@ -759,7 +841,7 @@ function draw_points(fieldName, svg) {
         .enter()
         .append('circle')
         .attr('class', function(d) {
-            return 'points' + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId
+            return 'points' + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d)
         })
         .attr('cx', scaled('pcap_secs'))
         .attr('cy', scaled(fieldName))
@@ -855,6 +937,26 @@ function update_pcaps_domain(newDomain) {
 
             // enter
             enter_boolean_boxes_by_dataset(fieldName, bool_boxes_current)
+
+        }
+
+        if (field_settings[fieldName].value_type == 'retrybad') {
+
+            // BOXES
+            var bool_boxes_current = d3.select(".boolean_boxes_retry-bad")
+                .selectAll(".bool_boxes_rect_retry-bad")
+                .data(trimmed_data, function(d) {
+                    return d.pcap_secs
+                })
+
+            // exit 
+            bool_boxes_current.exit().remove()
+
+            // update
+            bool_boxes_current.attr('x', scaled('pcap_secs'));
+
+            // enter
+            enter_retrybad_boxes_by_dataset(bool_boxes_current)
 
         }
 
@@ -1022,18 +1124,20 @@ function highlight_stream(d) {
     d3.selectAll(".selected_partialMatch_downstream").classed("selected_partialMatch_downstream", false).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_unselected)
     d3.selectAll(".selected_partialMatch_upstream").classed("selected_partialMatch_upstream", false).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_unselected)
 
-    if (d.dsmode == 1) {
+    if (d.bad != 1) {
+        if (d.dsmode == 1) {
 
-        d3.selectAll(".stream_" + d.streamId).classed("selected_upstream", true).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_selected)
-        d3.selectAll(".stream_" + complement_stream_id(d.streamId)).classed("selected_downstream", true).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_selected)
-        d3.selectAll(".ta_" + d.ta).classed("selected_partialMatch_upstream", true).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_selected);
-        d3.selectAll(".ra_" + d.ra).classed("selected_partialMatch_upstream", true).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_selected);
+            d3.selectAll(".stream_" + d.streamId).classed("selected_upstream", true).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_selected)
+            d3.selectAll(".stream_" + complement_stream_id(d.streamId)).classed("selected_downstream", true).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_selected)
+            d3.selectAll(".ta_" + d.ta).classed("selected_partialMatch_upstream", true).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_selected);
+            d3.selectAll(".ra_" + d.ra).classed("selected_partialMatch_upstream", true).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_selected);
 
-    } else {
-        d3.selectAll(".stream_" + d.streamId).classed("selected_downstream", true).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_selected)
-        d3.selectAll(".stream_" + complement_stream_id(d.streamId)).classed("selected_upstream", true).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_selected)
-        d3.selectAll(".ta_" + d.ta).classed("selected_partialMatch_downstream", true).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_selected)
-        d3.selectAll(".ra_" + d.ra).classed("selected_partialMatch_downstream", true).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_selected)
+        } else {
+            d3.selectAll(".stream_" + d.streamId).classed("selected_downstream", true).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_selected)
+            d3.selectAll(".stream_" + complement_stream_id(d.streamId)).classed("selected_upstream", true).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_selected)
+            d3.selectAll(".ta_" + d.ta).classed("selected_partialMatch_downstream", true).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_selected)
+            d3.selectAll(".ra_" + d.ra).classed("selected_partialMatch_downstream", true).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_selected)
+        }
     }
 
 }
