@@ -106,24 +106,19 @@
       stroke: none;
     }
 
-    .background_box {
+    .type_retry {
       stroke: none;
-      fill: #FFf7ff;
+      fill: black;
     }
 
-    .percent_area {
+    .type_bad {
       stroke: none;
-      fill: #291C5E;
+      fill: #890000;
     }
 
-    .percent_area_chart_boolean_retry {
-      stroke: black;
-      fill: none;
-    }
-
-    .percent_area_chart_boolean_bad {
-      stroke: green;
-      fill: none;
+    .bool_boxes_rect_retry-bad {
+      stroke-width: 3px;
+      stroke-opacity: 0;
     }
 
     .bad {
