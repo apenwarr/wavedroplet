@@ -109,6 +109,17 @@ var field_settings = {
         'value_type': 'boolean',
         'scale_type': 'linear',
         'height_factor': .6
+    },
+    'bw': {
+        'value_type': 'boolean',
+        'scale_type': 'linear',
+        'height_factor': .4
+    },
+    // note - spatial streams is actually values of 1 and 2, rather than 0 and 1 - this works, but is a hack
+    'spatialstreams': {
+        'value_type': 'boolean',
+        'scale_type': 'linear',
+        'height_factor': .4
     }
 }
 
@@ -664,6 +675,7 @@ function boolean_percent_of_total_area_setup(data, currentField, xFunc) {
 }
 
 function visualize_boolean(field, svg) {
+    setup_crosshairs(field, svg)
 
     var boolean_boxes = svg.append('g').attr("class", 'boolean_boxes_' + field).attr("fill", "grey")
 
@@ -679,9 +691,22 @@ function visualize_boolean(field, svg) {
 
     // x and y axis
     draw_metric_x_axis(svg, field);
+
+    // Add crosshairs
+    draw_vertical(reticle[field], field);
+
+}
+
+function setup_crosshairs(field, svg) {
+    // set up crosshairs element
+    reticle[field] = svg.append('g')
+        .attr("class", "focus")
+        .style('display', null);
 }
 
 function visualize_retrybad(svg) {
+    setup_crosshairs('retry-bad', svg)
+
     var boolean_boxes = svg.append('g').attr("class", 'boolean_boxes_retry-bad').attr("fill", "grey")
 
     // box charts
@@ -696,6 +721,10 @@ function visualize_retrybad(svg) {
 
     // x axis
     draw_metric_x_axis(svg, 'retry-bad');
+
+
+    // Add crosshairs
+    draw_vertical(reticle['retry-bad'], 'retry-bad');
 }
 
 function draw_boolean_percent_chart(field, svg) {
@@ -799,10 +828,18 @@ function enter_boolean_boxes_by_dataset(fieldName, svg) {
         .append('rect')
         .attr('x', scaled('pcap_secs'))
         .attr('y', function(d) {
-            if (d[fieldName] == 1) {
-                return 0
+            if (fieldName != 'spatialstreams') {
+                if (d[fieldName] == 1) {
+                    return 0
+                } else {
+                    return dimensions.height.per_chart * .2
+                }
             } else {
-                return dimensions.height.per_chart * .2
+                if (d[fieldName] == 2) {
+                    return 0
+                } else {
+                    return dimensions.height.per_chart * .2
+                }
             }
         })
         .attr('width', 2)
@@ -818,6 +855,13 @@ function enter_boolean_boxes_by_dataset(fieldName, svg) {
         })
         .on("click", function(d) {
             highlight_stream(d)
+        })
+        .on("mouseover", function(d) {
+            d3.select('#tooltip').classed("hidden", false)
+            update_crosshairs(d);
+        })
+        .on("mouseout", function(d) {
+            d3.select('#tooltip').classed("hidden", true)
         })
 }
 
@@ -851,6 +895,13 @@ function enter_retrybad_boxes_by_dataset(svg) {
         .on("click", function(d) {
             highlight_stream(d)
         })
+        .on("mouseover", function(d) {
+            d3.select('#tooltip').classed("hidden", false)
+            update_crosshairs(d);
+        })
+        .on("mouseout", function(d) {
+            d3.select('#tooltip').classed("hidden", true)
+        })
 }
 
 function determine_selected_class(d) {
@@ -882,10 +933,7 @@ function determine_selected_class(d) {
 
 
 function visualize_numbers(field, svg) {
-    // set up crosshairs element
-    reticle[field] = svg.append('g')
-        .attr("class", "focus")
-        .style('display', null);
+    setup_crosshairs(field, svg)
 
     // draw points
     draw_points(field, svg);
@@ -1068,7 +1116,7 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
             d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], fieldName, false);
             if (!d) return;
             select_stream(d);
-            update_crosshairs(d, fieldName);
+            update_crosshairs(d);
         })
         .on('mousemove', function() {
             d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], fieldName, true);
@@ -1076,8 +1124,21 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
             //          // do nothing
             //      }
             if (!d) return;
-            update_crosshairs(d, fieldName);
+            update_crosshairs(d);
         });
+}
+
+
+function draw_vertical(element, field) {
+    element.append('line')
+        .attr('class', 'x')
+        .attr('y1', 0)
+        .attr('y2', dimensions.height.per_chart * field_settings[field].height_factor);
+
+    element.append('line')
+        .attr('class', 'y')
+        .attr('x1', 0)
+        .attr('x2', dimensions.height.per_chart * field_settings[field].height_factor);
 }
 
 function draw_crosshairs(element) {
@@ -1099,6 +1160,26 @@ function draw_crosshairs(element) {
         .attr('class', 'y1')
         .attr('dx', 8)
         .attr('dy', '-.5em');
+}
+
+function find_packet_boolean(x, y, field, lock) {
+    if (x < state.scales['pcap_secs'].range()[0] ||
+        x > state.scales['pcap_secs'].range()[1] ||
+        y > total_height)
+        return;
+
+    var pcap_secs = state.scales['pcap_secs'].invert(x);
+    var search_in = dataset;
+
+    if (state.selected_data.stream && lock) {
+        search_in = stream2packetsDict[state.selected_data.stream].values;
+    }
+
+    var idx = binary_search_by_pcap_secs(search_in, pcap_secs, 0);
+    console.log(idx)
+        // d = closest_to_y(search_in, idx, x, y, scaled(field), field);
+
+    // return d;
 }
 
 function find_packet(x, y, field, lock) {
@@ -1156,7 +1237,7 @@ function closest_to_y(search_in, idx, x, y, scaled_y, field) {
     return search_in[closest_idx];
 }
 
-function update_crosshairs(d, field) {
+function update_crosshairs(d) {
     var detailedInfo = d;
 
     for (var r_field in reticle) {
