@@ -83,26 +83,32 @@ var field_settings = {
     'pcap_secs': {
         'value_type': 'number',
         'scale_type': 'linear',
+        'height_factor': 1
     },
     'seq': {
         'value_type': 'number',
         'scale_type': 'linear',
+        'height_factor': 1
     },
     'rate': {
         'value_type': 'number',
         'scale_type': 'linear',
+        'height_factor': 1
     },
     'retry-bad': {
         'value_type': 'retrybad',
-        'scale_type': 'linear'
+        'scale_type': 'linear',
+        'height_factor': .55
     },
     'retry': {
         'value_type': 'boolean',
-        'scale_type': 'linear'
+        'scale_type': 'linear',
+        'height_factor': .4
     },
     'bad': {
         'value_type': 'boolean',
-        'scale_type': 'linear'
+        'scale_type': 'linear',
+        'height_factor': .6
     }
 }
 
@@ -110,7 +116,8 @@ for (var i in selectableMetrics) {
     if (!field_settings[selectableMetrics[i]]) {
         field_settings[selectableMetrics[i]] = {
             'value_type': 'number',
-            'scale_type': 'linear'
+            'scale_type': 'linear',
+            'height_factor': 1
         }
     }
 }
@@ -617,7 +624,7 @@ function visualize(field) {
         .append('svg')
         .attr('class', 'plot_' + field)
         .attr('width', dimensions.width.chart + dimensions.width.y_axis)
-        .attr('height', dimensions.height.per_chart + dimensions.height.x_axis + dimensions.height.above_charts + dimensions.height.below_charts)
+        .attr('height', field_settings[field].height_factor * dimensions.height.per_chart + dimensions.height.x_axis + dimensions.height.above_charts + dimensions.height.below_charts)
         .append("g")
         .attr("transform", "translate(" + dimensions.page.left + "," + dimensions.height.above_charts + ")");;
 
@@ -667,8 +674,8 @@ function visualize_boolean(field, svg) {
             return d.pcap_secs
         }));
 
-    // area chart view
-    draw_boolean_percent_chart(field, svg);
+    // uncomment this to show area chart
+    //draw_boolean_percent_chart(field, svg);
 
     // x and y axis
     draw_metric_x_axis(svg, field);
@@ -684,8 +691,8 @@ function visualize_retrybad(svg) {
             return d.pcap_secs
         }));
 
-    // area chart view
-    draw_retrybad_percent_chart(svg);
+    // To include dripping percent chart, uncomment the line below
+    // draw_retrybad_percent_chart(svg);
 
     // x axis
     draw_metric_x_axis(svg, 'retry-bad');
@@ -807,7 +814,7 @@ function enter_boolean_boxes_by_dataset(fieldName, svg) {
             }
         })
         .attr("class", function(d) {
-            return 'bool_boxes_rect_' + fieldName + " " + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d);
+            return 'bool_boxes bool_boxes_rect_' + fieldName + " " + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d);
         })
         .on("click", function(d) {
             highlight_stream(d)
@@ -820,7 +827,7 @@ function enter_retrybad_boxes_by_dataset(svg) {
         .append('rect')
         .attr('x', scaled('pcap_secs'))
         .attr('y', function(d) {
-            // order is bad on top, then retry, the all
+            // order is bad on top, then retry, the all: note that if it's bad AND retry, it counts only as bad
             if (d['bad'] == 1) {
                 return 0
             } else if (d['retry'] == 1) {
@@ -926,7 +933,7 @@ function draw_metric_y_axis(svg, fieldName) {
 function draw_metric_x_axis(svg, fieldName) {
     // title for plot
     svg.append("text")
-        .attr('transform', 'translate(' + dimensions.width.chart / 2 + ',' + (dimensions.height.per_chart + dimensions.height.x_axis + dimensions.height.below_charts / 3) + ')')
+        .attr('transform', 'translate(' + dimensions.width.chart / 2 + ',' + (field_settings[fieldName].height_factor * dimensions.height.per_chart + dimensions.height.x_axis + dimensions.height.below_charts / 3) + ')')
         .attr("class", "text-label")
         .attr("text-anchor", "middle")
         .text(fieldName);
@@ -934,19 +941,7 @@ function draw_metric_x_axis(svg, fieldName) {
     // x axis
     var xaxis = svg.append('g')
         .attr('class', 'axis x metric')
-        .on("dblclick", function() {
-            var currentDomain = state.scales['pcap_secs'].domain();
-            var zoomCenter = state.scales['pcap_secs'].invert(d3.event.x);
-
-            var newDomain = [(zoomCenter - currentDomain[0]) / 2 + currentDomain[0], (zoomCenter - currentDomain[1]) / 2 + currentDomain[1]];
-
-            // update brush domain and visible extent
-            brush.extent(newDomain)
-            d3.selectAll(".brush").call(brush)
-
-            update_pcaps_domain(newDomain)
-        })
-        .attr('transform', 'translate(0,' + (dimensions.height.per_chart) + ')')
+        .attr('transform', 'translate(0,' + (field_settings[fieldName].height_factor * dimensions.height.per_chart) + ')')
 
     xaxis.call(pcapSecsAxis);
     xaxis.append("rect").attr('height', dimensions.height.x_axis).attr('width', dimensions.width.chart).style('opacity', 0);
@@ -1038,8 +1033,20 @@ function trim_by_pcap_secs(data) {
     return data.slice(binary_search_by_pcap_secs(data, domain[0]), binary_search_by_pcap_secs(data, domain[1]));
 }
 
+
+function zoomed() {
+    console.log('zoom me!', state.scales['pcap_secs'].domain())
+        // update brush domain and visible extent
+    brush.extent(state.scales['pcap_secs'].domain())
+    d3.selectAll(".brush").call(brush)
+
+    update_pcaps_domain(state.scales['pcap_secs'].domain())
+
+}
+
 // helper functions for selection
 function draw_hidden_rect_for_mouseover(svg, fieldName) {
+
     svg.append('rect')
         .attr('width', dimensions.width.chart)
         .attr('height', dimensions.height.per_chart)
