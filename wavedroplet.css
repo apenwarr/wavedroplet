@@ -18,7 +18,6 @@
       fill: #e08900;
     }
 
-
     circle.selected_upstream {
       stroke: #e08900;
       stroke-width: 2px;
@@ -107,12 +106,22 @@
       stroke: none;
     }
 
-    .background_box {
+    .type_retry {
       stroke: none;
-      fill: #FFf7ff;
+      fill: black;
     }
 
-    .percent_area {
+    .type_bad {
       stroke: none;
-      fill: #291C5E;
+      fill: #890000;
+    }
+
+    .bool_boxes_rect_retry-bad {
+      stroke-width: 3px;
+      stroke-opacity: 0;
+    }
+
+    .bad {
+      fill: #890000;
+      stroke: #890000;
     }

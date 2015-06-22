@@ -20,22 +20,18 @@
 
   <table>
     <tr>
-      <th>Show?</th>
       <th>Pkts</th>
       <th>MAC Addr</th>
       <th>Alias</th>
     </tr>
     {% for b, n in boxes %}
     <tr>
-      <td><input type='checkbox' name='show-{{b}}'
-             {{'checked' if checked.get(b) else ''}} /></td>
       <td>{{n}}</td>
       <td>{{b}}</td>
       <td><input name='name-{{b}}' value='{{aliases.get(b, "")}}' /></td>
     </tr>
     {% end %}
     <tr>
-      <td><input type='checkbox' name='show-other' /></td>
       <td>{{other}}</td>
       <td>(other)</td>
       <td></td>
