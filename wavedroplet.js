@@ -142,10 +142,15 @@ var pcapSecsAxis = d3.svg.axis()
     .orient('bottom')
     .ticks(5);
 
+// to manage zooming
+var zoom_stack = [];
+
 // set up brush and brushed function
 var brush = d3.svg.brush()
     .on("brushend", function() {
-        update_pcaps_domain(brush.empty() ? state.scales['pcap_secs_fixed'].domain() : brush.extent())
+
+        zoom_stack = [brush.empty() ? state.scales['pcap_secs_fixed'].domain() : brush.extent()];
+        update_pcaps_domain(zoom_stack[0]);
     });
 
 // binary search function for pcap_secs
