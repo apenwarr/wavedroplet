@@ -124,4 +124,5 @@
     .bad {
       fill: #890000;
       stroke: #890000;
+      opacity: .25;
     }
