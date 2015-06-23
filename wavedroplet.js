@@ -61,6 +61,7 @@ var availableMetrics = [
     "duration",
     "powerman",
     "retry",
+    "mcs"
 ];
 
 var selectableMetrics = [
@@ -423,6 +424,10 @@ function add_scale(field, range) {
             })
         ])
         .range(range);
+
+    if (!(state.scales[field].domain()[0]) || !(state.scales[field].domain()[0])) {
+        log(field, 'is missing')
+    }
 }
 
 function draw() {
