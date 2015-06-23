@@ -1246,13 +1246,14 @@ function update_crosshairs(d) {
 
         reticle[r_field].select('.x')
             .attr('transform', 'translate(' + closest_x + 10 + ',0)');
-        reticle[r_field].select('.y')
-            .attr('transform', 'translate(0,' + closest_y + ')');
 
-        // note - throws NaN errors when y is not a numeric value
-        reticle[r_field].select('circle.y')
-            .attr('transform',
-                'translate(' + closest_x + ',' + closest_y + ')');
+        if (!isNaN(closest_y)) {
+            reticle[r_field].select('.y')
+                .attr('transform', 'translate(0,' + closest_y + ')');
+            reticle[r_field].select('circle.y')
+                .attr('transform',
+                    'translate(' + closest_x + ',' + closest_y + ')');
+        }
     }
 
     update_show_Tooltip(detailedInfo);
