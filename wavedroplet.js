@@ -1276,6 +1276,8 @@ function highlight_stream(d) {
     d3.selectAll(".selected_partialMatch_upstream").classed("selected_partialMatch_upstream", false).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_unselected)
 
     if (d.bad != 1) {
+        d3.selectAll(".bad").classed("selected_bad", false);
+
         if (d.dsmode == 1) {
 
             d3.selectAll(".stream_" + d.streamId).classed("selected_upstream", true).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_selected)
@@ -1289,6 +1291,8 @@ function highlight_stream(d) {
             d3.selectAll(".ta_" + d.ta).classed("selected_partialMatch_downstream", true).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_selected)
             d3.selectAll(".ra_" + d.ra).classed("selected_partialMatch_downstream", true).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_selected)
         }
+    } else {
+        d3.selectAll(".bad").classed("selected_bad", true);
     }
 
 }
@@ -1315,6 +1319,7 @@ function select_stream(d) {
         d3.selectAll(".selected_upstream").classed("selected_upstream", false);
         d3.selectAll(".selected_partialMatch_downstream").classed("selected_partialMatch_downstream", false);
         d3.selectAll(".selected_partialMatch_upstream").classed("selected_partialMatch_upstream", false);
+        d3.selectAll(".bad").classed("selected_bad", false);
         state.selected_data.stream = null;
         state.selected_data.access = null;
         state.selected_data.station = null;

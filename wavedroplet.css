@@ -127,3 +127,7 @@
       stroke: #890000;
       opacity: .2;
     }
+
+    .selected_bad {
+      opacity: 1;
+    }
