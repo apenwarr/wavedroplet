@@ -1134,11 +1134,6 @@ function draw_vertical(element, field) {
         .attr('class', 'x')
         .attr('y1', 0)
         .attr('y2', dimensions.height.per_chart * field_settings[field].height_factor);
-
-    element.append('line')
-        .attr('class', 'y')
-        .attr('x1', 0)
-        .attr('x2', dimensions.height.per_chart * field_settings[field].height_factor);
 }
 
 function draw_crosshairs(element) {
