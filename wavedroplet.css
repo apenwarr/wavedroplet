@@ -96,7 +96,14 @@
     }
 
     .brush .extent {
+      stroke: none;
+      fill-opacity: .1;
+      shape-rendering: crispEdges;  
+    }
+
+    .plotRect .extent {
       stroke: #fff;
+      fill: red;
       fill-opacity: .125;
       shape-rendering: crispEdges;  
     }

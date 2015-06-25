@@ -169,7 +169,7 @@ var brush = d3.svg.brush()
     .on("brushend", function() {
 
         zoom_stack = [brush.empty() ? state.scales['pcap_secs_fixed'].domain() : brush.extent()];
-        update_pcaps_domain(zoom_stack[0]);
+        update_pcaps_domain(zoom_stack[0], false);
     });
 
 // binary search function for pcap_secs
@@ -470,6 +470,7 @@ function add_overview() {
         .select('body')
         .append('svg')
         .attr('id', 'histogramZoomNav')
+        .attr('class', 'overviewChart')
         .attr('width', dimensions.width.chart + dimensions.width.y_axis)
         .attr('height', dimensions.height.overview + dimensions.height.x_axis + dimensions.height.above_charts + dimensions.height.below_charts)
         .append("g")
@@ -1001,7 +1002,7 @@ function draw_metric_x_axis(svg, fieldName) {
 
 }
 
-function update_pcaps_domain(newDomain) {
+function update_pcaps_domain(newDomain, transition_bool) {
     // update charts
     state.scales['pcap_secs'].domain(newDomain);
     d3.selectAll(".axis.x.metric").call(pcapSecsAxis);
@@ -1018,16 +1019,20 @@ function update_pcaps_domain(newDomain) {
 
             points.exit().remove();
 
-            points.attr('cx', scaled('pcap_secs'))
-
+            if (transition_bool) {
+                points.transition().duration(2000).attr('cx', scaled('pcap_secs'))
+            } else {
+                points.attr('cx', scaled('pcap_secs'))
+            }
             points.enter()
                 .append('circle')
-                .attr('cx', scaled('pcap_secs'))
                 .attr('cy', scaled(fieldName))
                 .attr("class", function(d) {
-                    return 'points ' + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d)
-                })
-                .attr('r', 2);
+                    return 'points ' + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d);
+                }).attr('r', 2)
+                .attr('cx', scaled('pcap_secs'));
+
+
         }
 
         if (field_settings[fieldName].value_type == 'boolean') {
@@ -1043,7 +1048,11 @@ function update_pcaps_domain(newDomain) {
             bool_boxes_current.exit().remove()
 
             // update
-            bool_boxes_current.attr('x', scaled('pcap_secs'));
+            if (transition_bool) {
+                bool_boxes_current.transition().duration(2000).attr('x', scaled('pcap_secs'));
+            } else {
+                bool_boxes_current.attr('x', scaled('pcap_secs'));
+            }
 
             // enter
             enter_boolean_boxes_by_dataset(fieldName, bool_boxes_current)
@@ -1062,8 +1071,13 @@ function update_pcaps_domain(newDomain) {
             // exit 
             bool_boxes_current.exit().remove()
 
+
             // update
-            bool_boxes_current.attr('x', scaled('pcap_secs'));
+            if (transition_bool) {
+                bool_boxes_current.transition().duration(2000).attr('x', scaled('pcap_secs'));
+            } else {
+                bool_boxes_current.attr('x', scaled('pcap_secs'));
+            }
 
             // enter
             enter_retrybad_boxes_by_dataset(bool_boxes_current)
@@ -1087,18 +1101,90 @@ function trim_by_pcap_secs(data) {
 }
 
 
-function zoomed() {
-    console.log('zoom me!', state.scales['pcap_secs'].domain())
-        // update brush domain and visible extent
+function zoomOut() {
+    // get last element from the zoom stack
+    console.log('zooming out')
+    var k = zoom_stack.pop();
+    if (k) {
+        state.scales['pcap_secs'].domain(k)
+    } else {
+        state.scales['pcap_secs'].domain(state.scales['pcap_secs_fixed'].domain())
+    }
+    // update brush domain and visible extent
     brush.extent(state.scales['pcap_secs'].domain())
     d3.selectAll(".brush").call(brush)
 
-    update_pcaps_domain(state.scales['pcap_secs'].domain())
-
+    update_pcaps_domain(state.scales['pcap_secs'].domain(), true)
 }
+
+var clicks = 0;
+var event_list = [];
+var event_list_fixed = [];
 
 // helper functions for selection
 function draw_hidden_rect_for_mouseover(svg, fieldName) {
+
+    svg.append("rect")
+        .attr("height", dimensions.height.per_chart)
+        .attr("width", 0)
+        .attr("fill", "grey")
+        .attr("opacity", .1)
+        .attr("x", 0)
+        .attr("y", 0)
+        .attr("class", "drag_rect hidden")
+
+    var click_timeout;
+    var dragging = false;
+    var mouse_start_pos;
+
+    var drag_metrics = {
+        x_start: [],
+        x_diff: 0
+    };
+    /*
+    var drag = d3.behavior.drag()
+        .on("dragstart", function() {
+            drag_metrics.start = d3.mouse(this)[0]
+            svg.append("rect")
+                .attr("height", dimensions.height.per_chart)
+                .attr("width", 1)
+                .attr("fill", "black")
+                .attr("opacity", .1)
+                .attr("x", drag_metrics.start)
+                .attr("y", 0)
+                .attr("class", "drag_rect")
+        })
+        .on("drag", function(d) {
+            drag_metrics.x_diff = d3.mouse(this)[0] - drag_metrics.start
+            d3.select(".drag_rect").attr("width", drag_metrics.x_diff)
+        })
+        .on("dragend", function() {
+            if (drag_metrics.x_diff > 5) {
+                d3.select(".drag_rect").transition().duration(500).attr("x", 0).attr("width", dimensions.width.chart)
+                zoom_stack[zoom_stack.length] = state.scales['pcap_secs'].domain();
+
+                // define new domain, and update
+                var newDomain = [
+                    state.scales['pcap_secs'].invert(drag_metrics.x_start),
+                    state.scales['pcap_secs'].invert(d3.mouse(this)[0])
+                ];
+
+                state.scales['pcap_secs'].domain(newDomain)
+                brush.extent(newDomain)
+                d3.selectAll(".brush").call(brush)
+
+                update_pcaps_domain(newDomain)
+                drag_metrics = {
+                    x_start: [],
+                    x_diff: 0
+                };
+                mouse_start_pos = null;
+                dragging = false;
+            } else {
+                zoomOut()
+            }
+            d3.selectAll(".drag_rect").transition().delay(2000).remove()
+        });*/
 
     svg.append('rect')
         .attr('width', dimensions.width.chart)
@@ -1117,22 +1203,105 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
                 d3.selectAll(".focus").classed("hidden", true)
             }
         })
-        .on('click', function() {
-            d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], fieldName, false);
-            if (!d) return;
-            select_stream(d);
-            update_crosshairs(d);
+        .on('mousedown', function() {
+            console.log('mousedown', d3.event)
+            event_list.push('mousedown')
+            mouse_start_pos = d3.mouse(this)[0]
+            d3.event.preventDefault()
+        })
+        .on('mouseup', function() {
+            console.log('mouseup')
+            event_list.push('MOUSEUP')
+                // end of drag
+            if (dragging == true) {
+                console.log('end of drag')
+                d3.select(".drag_rect").transition().duration(500).attr("x", 0).attr("width", dimensions.width.chart)
+                zoom_stack[zoom_stack.length] = state.scales['pcap_secs'].domain();
+
+                // define new domain, and update
+                if (drag_metrics.x_diff > 0) {
+                    var newDomain = [
+                        state.scales['pcap_secs'].invert(mouse_start_pos),
+                        state.scales['pcap_secs'].invert(d3.mouse(this)[0])
+                    ];
+                } else {
+                    var newDomain = [
+                        state.scales['pcap_secs'].invert(d3.mouse(this)[0]),
+                        state.scales['pcap_secs'].invert(mouse_start_pos)
+                    ];
+                }
+
+                state.scales['pcap_secs'].domain(newDomain)
+                brush.extent(newDomain)
+                d3.selectAll(".brush").call(brush)
+
+                update_pcaps_domain(newDomain, true)
+                drag_metrics = {
+                    x_start: [],
+                    x_diff: 0
+                }
+
+                d3.selectAll(".drag_rect").transition().delay(500).attr("opacity", 0).attr("x", 0).attr("width", 0);
+                var timeout2 = window.setTimeout(hide_element, 500, '.drag_rect')
+                dragging = false;
+                event_list_fixed = event_list_fixed.concat(event_list)
+                event_list = [];
+                clicks = 0;
+                mouse_start_pos = 0;
+            } else if (event_list[event_list.length - 2] == 'mousedown') {
+                clicks++
+                if (clicks == 1) {
+                    //click_timeout = window.setTimeout(on_click(d3.mouse(this), fieldName), 5000);
+                    click_timeout = window.setTimeout(on_click, 200, d3.mouse(this), fieldName);
+                } else {
+                    console.log('double')
+                    window.clearTimeout(click_timeout);
+                    zoomOut()
+                    event_list_fixed = event_list_fixed.concat(event_list)
+                    event_list = [];
+                    clicks = 0;
+                }
+            }
         })
         .on('mousemove', function() {
-            d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], fieldName, true);
-            //      if (!state.selected_data.stream) {
-            //          // do nothing
-            //      }
-            if (!d) return;
-            update_crosshairs(d);
-        });
+            console.log('mousemove')
+            event_list.push("mousemove")
+            if (event_list.indexOf('mousedown') != -1) {
+                if (dragging == true) {
+                    drag_metrics.x_diff = d3.mouse(this)[0] - mouse_start_pos
+                    if (drag_metrics.x_diff > 0) {
+                        d3.select(".drag_rect").attr("width", drag_metrics.x_diff).attr("x", mouse_start_pos)
+                    } else {
+                        d3.select(".drag_rect").attr("width", -drag_metrics.x_diff).attr("x", mouse_start_pos + drag_metrics.x_diff)
+                    }
+                } else if (event_list[event_list.length - 2] == 'mousemove') {
+                    console.log('start of drag')
+                    dragging = true;
+                    d3.selectAll(".drag_rect").classed("hidden", false).attr("width", 0).attr("x", mouse_start_pos).attr("opacity", .1)
+                }
+            } else {
+
+                d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], fieldName, true);
+                if (!d) return;
+                update_crosshairs(d);
+            }
+        })
 }
 
+function hide_element(element) {
+    d3.selectAll(element).classed("hidden", true);
+}
+
+function on_click(location, field) {
+    console.log('click')
+    event_list_fixed = event_list_fixed.concat(event_list)
+    event_list = []
+    clicks = 0;
+    d = find_packet(location[0], location[1], field, false);
+    if (!d) return;
+    select_stream(d);
+    update_crosshairs(d);
+}
 
 function draw_vertical(element, field) {
     element.append('line')
@@ -1176,8 +1345,7 @@ function find_packet_boolean(x, y, field, lock) {
     }
 
     var idx = binary_search_by_pcap_secs(search_in, pcap_secs, 0);
-    console.log(idx)
-        // d = closest_to_y(search_in, idx, x, y, scaled(field), field);
+    // d = closest_to_y(search_in, idx, x, y, scaled(field), field);
 
     // return d;
 }
