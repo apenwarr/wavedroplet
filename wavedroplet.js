@@ -701,6 +701,8 @@ function visualize_boolean(field, svg) {
     // Add crosshairs
     draw_vertical(reticle[field], field);
 
+    // rect for zooming
+    draw_rect_for_zooming(svg, dimensions.height.per_chart * field_settings[field].height_factor)
 }
 
 function setup_crosshairs(field, svg) {
@@ -731,6 +733,9 @@ function visualize_retrybad(svg) {
 
     // Add crosshairs
     draw_vertical(reticle['retry-bad'], 'retry-bad');
+
+    // zooming object
+    draw_rect_for_zooming(svg, dimensions.height.per_chart * field_settings['retry-bad'].height_factor)
 }
 
 function draw_boolean_percent_chart(field, svg) {
@@ -952,7 +957,19 @@ function visualize_numbers(field, svg) {
     draw_crosshairs(reticle[field]);
 
     // append the rectangle to capture mouse movements
+    draw_rect_for_zooming(svg, dimensions.height.per_chart)
     draw_hidden_rect_for_mouseover(svg, field)
+}
+
+function draw_rect_for_zooming(svg, height) {
+    svg.append("rect")
+        .attr("height", height)
+        .attr("width", 0)
+        .attr("fill", "grey")
+        .attr("opacity", .1)
+        .attr("x", 0)
+        .attr("y", 0)
+        .attr("class", "drag_rect hidden")
 }
 
 function draw_points(fieldName, svg) {
@@ -1103,7 +1120,6 @@ function trim_by_pcap_secs(data) {
 
 function zoomOut() {
     // get last element from the zoom stack
-    console.log('zooming out')
     var k = zoom_stack.pop();
     if (k) {
         state.scales['pcap_secs'].domain(k)
@@ -1119,19 +1135,9 @@ function zoomOut() {
 
 var clicks = 0;
 var event_list = [];
-var event_list_fixed = [];
 
 // helper functions for selection
 function draw_hidden_rect_for_mouseover(svg, fieldName) {
-
-    svg.append("rect")
-        .attr("height", dimensions.height.per_chart)
-        .attr("width", 0)
-        .attr("fill", "grey")
-        .attr("opacity", .1)
-        .attr("x", 0)
-        .attr("y", 0)
-        .attr("class", "drag_rect hidden")
 
     var click_timeout;
     var dragging = false;
@@ -1204,18 +1210,15 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
             }
         })
         .on('mousedown', function() {
-            console.log('mousedown', d3.event)
             event_list.push('mousedown')
             mouse_start_pos = d3.mouse(this)[0]
             d3.event.preventDefault()
         })
         .on('mouseup', function() {
-            console.log('mouseup')
-            event_list.push('MOUSEUP')
+            event_list.push('mouseup')
                 // end of drag
             if (dragging == true) {
-                console.log('end of drag')
-                d3.select(".drag_rect").transition().duration(500).attr("x", 0).attr("width", dimensions.width.chart)
+                d3.selectAll(".drag_rect").transition().duration(500).attr("x", 0).attr("width", dimensions.width.chart)
                 zoom_stack[zoom_stack.length] = state.scales['pcap_secs'].domain();
 
                 // define new domain, and update
@@ -1244,7 +1247,6 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
                 d3.selectAll(".drag_rect").transition().delay(500).attr("opacity", 0).attr("x", 0).attr("width", 0);
                 var timeout2 = window.setTimeout(hide_element, 500, '.drag_rect')
                 dragging = false;
-                event_list_fixed = event_list_fixed.concat(event_list)
                 event_list = [];
                 clicks = 0;
                 mouse_start_pos = 0;
@@ -1254,28 +1256,24 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
                     //click_timeout = window.setTimeout(on_click(d3.mouse(this), fieldName), 5000);
                     click_timeout = window.setTimeout(on_click, 200, d3.mouse(this), fieldName);
                 } else {
-                    console.log('double')
                     window.clearTimeout(click_timeout);
                     zoomOut()
-                    event_list_fixed = event_list_fixed.concat(event_list)
                     event_list = [];
                     clicks = 0;
                 }
             }
         })
         .on('mousemove', function() {
-            console.log('mousemove')
             event_list.push("mousemove")
             if (event_list.indexOf('mousedown') != -1) {
                 if (dragging == true) {
                     drag_metrics.x_diff = d3.mouse(this)[0] - mouse_start_pos
                     if (drag_metrics.x_diff > 0) {
-                        d3.select(".drag_rect").attr("width", drag_metrics.x_diff).attr("x", mouse_start_pos)
+                        d3.selectAll(".drag_rect").attr("width", drag_metrics.x_diff).attr("x", mouse_start_pos)
                     } else {
-                        d3.select(".drag_rect").attr("width", -drag_metrics.x_diff).attr("x", mouse_start_pos + drag_metrics.x_diff)
+                        d3.selectAll(".drag_rect").attr("width", -drag_metrics.x_diff).attr("x", mouse_start_pos + drag_metrics.x_diff)
                     }
                 } else if (event_list[event_list.length - 2] == 'mousemove') {
-                    console.log('start of drag')
                     dragging = true;
                     d3.selectAll(".drag_rect").classed("hidden", false).attr("width", 0).attr("x", mouse_start_pos).attr("opacity", .1)
                 }
@@ -1293,8 +1291,6 @@ function hide_element(element) {
 }
 
 function on_click(location, field) {
-    console.log('click')
-    event_list_fixed = event_list_fixed.concat(event_list)
     event_list = []
     clicks = 0;
     d = find_packet(location[0], location[1], field, false);
