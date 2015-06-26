@@ -155,6 +155,8 @@ var dataset; // all packets, sorted by pcap_secs
 var stream2packetsDict = {};
 var stream2packetsArray = [];
 
+var zoom_duration = 750;
+
 // pcap axis
 var pcapSecsAxis = d3.svg.axis()
     .tickFormat(hourMinuteMilliseconds)
@@ -1037,7 +1039,7 @@ function update_pcaps_domain(newDomain, transition_bool) {
             points.exit().remove();
 
             if (transition_bool) {
-                points.transition().duration(2000).attr('cx', scaled('pcap_secs'))
+                points.transition().duration(zoom_duration).attr('cx', scaled('pcap_secs'))
             } else {
                 points.attr('cx', scaled('pcap_secs'))
             }
@@ -1048,7 +1050,6 @@ function update_pcaps_domain(newDomain, transition_bool) {
                     return 'points ' + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d);
                 }).attr('r', 2)
                 .attr('cx', scaled('pcap_secs'));
-
 
         }
 
@@ -1066,7 +1067,7 @@ function update_pcaps_domain(newDomain, transition_bool) {
 
             // update
             if (transition_bool) {
-                bool_boxes_current.transition().duration(2000).attr('x', scaled('pcap_secs'));
+                bool_boxes_current.transition().duration(zoom_duration).attr('x', scaled('pcap_secs'));
             } else {
                 bool_boxes_current.attr('x', scaled('pcap_secs'));
             }
@@ -1091,7 +1092,7 @@ function update_pcaps_domain(newDomain, transition_bool) {
 
             // update
             if (transition_bool) {
-                bool_boxes_current.transition().duration(2000).attr('x', scaled('pcap_secs'));
+                bool_boxes_current.transition().duration(zoom_duration).attr('x', scaled('pcap_secs'));
             } else {
                 bool_boxes_current.attr('x', scaled('pcap_secs'));
             }
@@ -1218,7 +1219,7 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
             event_list.push('mouseup')
                 // end of drag
             if (dragging == true) {
-                d3.selectAll(".drag_rect").transition().duration(500).attr("x", 0).attr("width", dimensions.width.chart)
+                d3.selectAll(".drag_rect").transition().duration(zoom_duration).attr("x", 0).attr("width", dimensions.width.chart)
                 zoom_stack[zoom_stack.length] = state.scales['pcap_secs'].domain();
 
                 // define new domain, and update
