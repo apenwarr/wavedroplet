@@ -241,19 +241,18 @@ function init(json) {
     var packetSecs = []
 
     for (var a in json.aliases) {
-        aliases[a] = json.aliases[a]
+        aliases[a.replace(/:/gi, "")] = json.aliases[a]
     }
-
+    aliases['badpacket'] = "bad_packet"
 
     dataset.forEach(function(d) {
         if (d.bad == 1) {
-            d.ta = 'bad_packet';
-            d.ra = 'bad_packet';
+            d.ta = 'badpacket';
+            d.ra = 'badpacket';
         }
         // store time of packet
         packetSecs.push(d.pcap_secs)
 
-        replace_address_with_alias(d, json.aliases);
         // track streams
         var streamId = to_stream_key(d);
         d.ta = d.ta.replace(/:/gi, "")
@@ -312,17 +311,9 @@ function to_stream_key(d) {
     return d['ta'].replace(/:/g, '') + '---' + d['ra'].replace(/:/g, '');
 }
 
-function to_visible_stream_key(d) {
-    return d.replace(/---/g, '→')
-}
-
-function to_css_stream_key(d) {
-    return d.replace(/→/g, '---')
-}
-
-function replace_address_with_alias(d, aliases) {
-    d['ta'] = aliases[d['ta']] || d['ta']
-    d['ra'] = aliases[d['ra']] || d['ra']
+function to_visible_stream_key(streamId) {
+    var z = streamId.match(/(([a-z]|[A-Z]|[0-9])+)---(([a-z]|[A-Z]|[0-9])+)/)
+    return aliases[z[1]] + '→' + aliases[z[3]];
 }
 
 function complement_stream_id(key) {
@@ -525,18 +516,9 @@ function add_butter_bar() {
 
 function add_legend() {
     var font_width = 6;
-    var key_length = font_width * 36;
+    var key_length = font_width * 40;
     var n_cols = Math.floor(dimensions.width.chart / key_length);
     var n_rows = Math.ceil(stream2packetsArray.length / n_cols)
-
-    var legend = d3
-        .select('body')
-        .append('svg')
-        .attr('class', 'legend')
-        .attr('width', dimensions.width.chart)
-        .attr('height', n_rows * 12)
-        .append("g")
-        .attr("transform", "translate(" + dimensions.page.left + ",0)");
 
 
     for (var i in stream2packetsArray) {
@@ -561,28 +543,44 @@ function add_legend() {
         if (dsmode[1].length != 0) {
             stream2packetsDict[streamId].dsmode = 1;
         }
-        var legend_line_height = 30;
-
-        var col = i % n_cols;
-        var row = Math.floor(i / n_cols);
-        legend
-            .append('text')
-            .attr('class', 'legend stream_' + streamId + ' ta_' + streamId.split("---")[0] + ' ra_' + streamId.split("---")[1] + ' dsmode_' + stream2packetsDict[streamId].dsmode)
-            .attr('x', col * key_length)
-            .attr('y', (row + .5) * legend_line_height)
-            .text(to_visible_stream_key(streamId))
-            .on('click', function() {
-                var streamId = to_css_stream_key(this.textContent);
-                highlight_stream({
-                    'streamId': streamId,
-                    'ta': streamId.split("---")[0],
-                    'ra': streamId.split("---")[1],
-                    'dsmode': stream2packetsDict[streamId].dsmode
-                })
-            });
-
-
     }
+    var legend_line_height = 24;
+
+    d3.select('body')
+        .append('svg')
+        .attr('width', dimensions.width.chart)
+        .attr('height', n_rows * 12)
+        .attr('class', 'legendG')
+        .append("g")
+        .attr("transform", "translate(" + dimensions.page.left + ",0)")
+        .selectAll(".legend")
+        .data(stream2packetsArray)
+        .enter()
+        .append('text')
+        .attr('class', function(d) {
+            return 'legend stream_' + d +
+                ' ta_' + d.split("---")[0] +
+                ' ra_' + d.split("---")[1] +
+                ' dsmode_' + stream2packetsDict[d].dsmode;
+        })
+        .attr('x', function(d, i) {
+            return (i % n_cols) * key_length
+        })
+        .attr('y', function(d, i) {
+            return (Math.floor(i / n_cols) + .5) * legend_line_height
+
+        })
+        .text(function(d) {
+            return to_visible_stream_key(d)
+        })
+        .on('click', function(d) {
+            highlight_stream({
+                'streamId': d,
+                'ta': d.split("---")[0],
+                'ra': d.split("---")[1],
+                'dsmode': stream2packetsDict[streamId].dsmode
+            })
+        });
 }
 
 function butter_bar(text) {
@@ -1416,6 +1414,9 @@ function update_show_Tooltip(data) {
         .text(function(k) {
             if (k == "streamId") {
                 return k + ": " + to_visible_stream_key(data[k]);
+            }
+            if (k == "ta" || k == "ra") {
+                return k + ": " + aliases[data[k]]
             }
             return k + ": " + data[k]
         });
