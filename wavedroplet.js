@@ -837,7 +837,7 @@ function enter_boolean_boxes_by_dataset(fieldName, svg) {
         })
         .attr('width', 2)
         .attr('height', function(d) {
-            if (determine_selected_class(d) == "" || determine_selected_class(d) == "bad") {
+            if (determine_selected_class(d) == "" || determine_selected_class(d) == "badpacket") {
                 return dimensions.height.per_chart * dimensions.height.bar_factor_unselected
             } else {
                 return dimensions.height.per_chart * dimensions.height.bar_factor_selected
@@ -876,7 +876,7 @@ function enter_retrybad_boxes_by_dataset(svg) {
         .attr('width', 1)
         .attr('height', function(d) {
             // selected rectangles are taller/longer
-            if (determine_selected_class(d) == "" || determine_selected_class(d) == "bad") {
+            if (determine_selected_class(d) == "" || determine_selected_class(d) == "badpacket") {
                 return dimensions.height.per_chart * dimensions.height.bar_factor_unselected
             } else {
                 return dimensions.height.per_chart * dimensions.height.bar_factor_selected
@@ -899,7 +899,7 @@ function enter_retrybad_boxes_by_dataset(svg) {
 
 function determine_selected_class(d) {
     if (d.bad == 1) {
-        return 'bad'
+        return 'badpacket'
     } else if (!state.selected_data.stream || state.selected_data.stream == null) {
         return "";
     } else if (d.dsmode == 1) {
@@ -1431,8 +1431,10 @@ function highlight_stream(d) {
     d3.selectAll(".selected_partialMatch_downstream").classed("selected_partialMatch_downstream", false).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_unselected)
     d3.selectAll(".selected_partialMatch_upstream").classed("selected_partialMatch_upstream", false).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_unselected)
 
-    if (d.bad != 1) {
-        d3.selectAll(".bad").classed("selected_bad", false);
+    console.log(d.streamId)
+    if (d.streamId != "badpacket---badpacket") {
+        d3.selectAll(".selected_bad").classed("selected_bad", false);
+        d3.selectAll(".stream_badpacket---badpacket").filter('.legend').classed("selected_bad", false);
 
         if (d.dsmode == 1) {
 
@@ -1448,13 +1450,15 @@ function highlight_stream(d) {
             d3.selectAll(".ra_" + d.ra).classed("selected_partialMatch_downstream", true).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_selected)
         }
     } else {
-        d3.selectAll(".bad").classed("selected_bad", true);
+        d3.selectAll(".badpacket").classed("selected_bad", true);
+        d3.selectAll(".stream_badpacket---badpacket").filter('.legend').classed("selected_bad", true);
     }
 
 }
 
 function select_stream(d) {
-    // if new stream selected, update view & selected stream
+    console.log(d)
+        // if new stream selected, update view & selected stream
     if (!state.selected_data.stream || d.streamId != state.selected_data.stream) {
 
         // need to clear because from the legend the user can click on another stream even when a stream is "locked"

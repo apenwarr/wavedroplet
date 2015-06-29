@@ -129,7 +129,7 @@
       opacity: .3;
     }
 
-    .bad {
+    .badpacket {
       fill: #890000;
       stroke: #890000;
       opacity: .2;
@@ -137,4 +137,5 @@
 
     .selected_bad {
       opacity: 1;
+      fill: #890000;
     }
