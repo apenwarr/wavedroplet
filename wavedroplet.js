@@ -154,6 +154,7 @@ var number_of_packets;
 var dataset; // all packets, sorted by pcap_secs
 var stream2packetsDict = {};
 var stream2packetsArray = [];
+var aliases = {}
 
 var zoom_duration = 750;
 
@@ -239,6 +240,11 @@ function init(json) {
     // get array of all packetSecs and use a histogram
     var packetSecs = []
 
+    for (var a in json.aliases) {
+        aliases[a] = json.aliases[a]
+    }
+
+
     dataset.forEach(function(d) {
         if (d.bad == 1) {
             d.ta = 'bad_packet';
@@ -249,7 +255,7 @@ function init(json) {
 
         replace_address_with_alias(d, json.aliases);
         // track streams
-        var streamId = to_stream_key(d, json.aliases);
+        var streamId = to_stream_key(d);
         d.ta = d.ta.replace(/:/gi, "")
         d.ra = d.ra.replace(/:/gi, "")
 
@@ -302,7 +308,7 @@ function get_query_param(param) {
     return urlKeyValuePairs[param].split(',')
 }
 
-function to_stream_key(d, aliases) {
+function to_stream_key(d) {
     return d['ta'].replace(/:/g, '') + '---' + d['ra'].replace(/:/g, '');
 }
 
@@ -334,30 +340,6 @@ function get_query_param(param) {
         urlKeyValuePairs[m[0]] = m[1]
     })
     return urlKeyValuePairs[param].split(',')
-}
-
-function to_stream_key(d, aliases) {
-    return d['ta'].replace(/:/g, '') + '---' + d['ra'].replace(/:/g, '');
-}
-
-function to_visible_stream_key(d) {
-    return d.replace(/---/g, '→')
-}
-
-function to_css_stream_key(d) {
-    return d.replace(/→/g, '---')
-}
-
-function replace_address_with_alias(d, aliases) {
-    d['ta'] = aliases[d['ta']] || d['ta']
-    d['ra'] = aliases[d['ra']] || d['ra']
-}
-
-function complement_stream_id(key) {
-    // match any letter/number for aliases
-    var re = /(([a-z]|[A-Z]|[0-9])+)---(([a-z]|[A-Z]|[0-9])+)/
-    var z = key.match(re)
-    return z[3] + "---" + z[1]
 }
 
 var excludedData = {
