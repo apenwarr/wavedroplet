@@ -1128,50 +1128,6 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
         x_start: [],
         x_diff: 0
     };
-    /*
-    var drag = d3.behavior.drag()
-        .on("dragstart", function() {
-            drag_metrics.start = d3.mouse(this)[0]
-            svg.append("rect")
-                .attr("height", dimensions.height.per_chart)
-                .attr("width", 1)
-                .attr("fill", "black")
-                .attr("opacity", .1)
-                .attr("x", drag_metrics.start)
-                .attr("y", 0)
-                .attr("class", "drag_rect")
-        })
-        .on("drag", function(d) {
-            drag_metrics.x_diff = d3.mouse(this)[0] - drag_metrics.start
-            d3.select(".drag_rect").attr("width", drag_metrics.x_diff)
-        })
-        .on("dragend", function() {
-            if (drag_metrics.x_diff > 5) {
-                d3.select(".drag_rect").transition().duration(500).attr("x", 0).attr("width", dimensions.width.chart)
-                zoom_stack[zoom_stack.length] = state.scales['pcap_secs'].domain();
-
-                // define new domain, and update
-                var newDomain = [
-                    state.scales['pcap_secs'].invert(drag_metrics.x_start),
-                    state.scales['pcap_secs'].invert(d3.mouse(this)[0])
-                ];
-
-                state.scales['pcap_secs'].domain(newDomain)
-                brush.extent(newDomain)
-                d3.selectAll(".brush").call(brush)
-
-                update_pcaps_domain(newDomain)
-                drag_metrics = {
-                    x_start: [],
-                    x_diff: 0
-                };
-                mouse_start_pos = null;
-                dragging = false;
-            } else {
-                zoomOut()
-            }
-            d3.selectAll(".drag_rect").transition().delay(2000).remove()
-        });*/
 
     svg.append('rect')
         .attr('width', dimensions.width.chart)
