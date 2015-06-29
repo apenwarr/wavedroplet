@@ -241,9 +241,9 @@ function init(json) {
     var packetSecs = []
 
     for (var a in json.aliases) {
-        aliases[a.replace(/:/gi, "")] = json.aliases[a]
+        aliases[a.replace(/:/gi, "")].name = json.aliases[a]
     }
-    aliases['badpacket'] = "bad_packet"
+    aliases['badpacket'].name = "bad_packet"
 
     dataset.forEach(function(d) {
         if (d.bad == 1) {
@@ -313,7 +313,7 @@ function to_stream_key(d) {
 
 function to_visible_stream_key(streamId) {
     var z = streamId.match(/(([a-z]|[A-Z]|[0-9])+)---(([a-z]|[A-Z]|[0-9])+)/)
-    return aliases[z[1]] + '→' + aliases[z[3]];
+    return aliases[z[1]].name + '→' + aliases[z[3]].name;
 }
 
 function complement_stream_id(key) {
@@ -1372,7 +1372,7 @@ function update_show_Tooltip(data) {
                 return k + ": " + to_visible_stream_key(data[k]);
             }
             if (k == "ta" || k == "ra") {
-                return k + ": " + aliases[data[k]]
+                return k + ": " + aliases[data[k]].name
             }
             return k + ": " + data[k]
         });
