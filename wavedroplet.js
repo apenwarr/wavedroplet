@@ -542,19 +542,20 @@ function add_butter_bar() {
 }
 
 function add_legend() {
+    var font_width = 6;
+    var key_length = font_width * 36;
+    var n_cols = Math.floor(dimensions.width.chart / key_length);
+    var n_rows = Math.ceil(stream2packetsArray.length / n_cols)
+
     var legend = d3
         .select('body')
         .append('svg')
         .attr('class', 'legend')
         .attr('width', dimensions.width.chart)
-        .attr('height', dimensions.height.per_chart)
+        .attr('height', n_rows * 12)
         .append("g")
         .attr("transform", "translate(" + dimensions.page.left + ",0)");
 
-    var font_width = 6;
-    var key_length = font_width * ((12 + 5) * 2 + 1);
-    var total_length = key_length;
-    var n_cols = Math.floor(total_width / total_length);
 
     for (var i in stream2packetsArray) {
         var streamId = stream2packetsArray[i];
@@ -579,27 +580,26 @@ function add_legend() {
             stream2packetsDict[streamId].dsmode = 1;
         }
         var legend_line_height = 30;
-        // only show on legend if more than 1% belong to this stream
-        if (count > number_of_packets * .01) {
-            var col = i % n_cols;
-            var row = Math.floor(i / n_cols);
-            legend.append('text')
-                .attr('class', 'legend stream_' + streamId + ' ta_' + streamId.split("---")[0] + ' ra_' + streamId.split("---")[1] + ' dsmode_' + stream2packetsDict[streamId].dsmode)
-                .attr('x', col * total_length)
-                .attr('y', (row + .5) * legend_line_height)
-                .text(to_visible_stream_key(streamId))
-                .on('click', function() {
-                    var streamId = to_css_stream_key(this.textContent);
-                    highlight_stream({
-                        'streamId': streamId,
-                        'ta': streamId.split("---")[0],
-                        'ra': streamId.split("---")[1],
-                        'dsmode': stream2packetsDict[streamId].dsmode
-                    })
-                });
-        } else {
-            break;
-        }
+
+        var col = i % n_cols;
+        var row = Math.floor(i / n_cols);
+        legend
+            .append('text')
+            .attr('class', 'legend stream_' + streamId + ' ta_' + streamId.split("---")[0] + ' ra_' + streamId.split("---")[1] + ' dsmode_' + stream2packetsDict[streamId].dsmode)
+            .attr('x', col * key_length)
+            .attr('y', (row + .5) * legend_line_height)
+            .text(to_visible_stream_key(streamId))
+            .on('click', function() {
+                var streamId = to_css_stream_key(this.textContent);
+                highlight_stream({
+                    'streamId': streamId,
+                    'ta': streamId.split("---")[0],
+                    'ra': streamId.split("---")[1],
+                    'dsmode': stream2packetsDict[streamId].dsmode
+                })
+            });
+
+
     }
 }
 
