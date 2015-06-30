@@ -1,7 +1,7 @@
 "use strict";
 
 // debugging
-var debug = false;
+var debug = true;
 
 function log(o) {
     if (debug) {
@@ -18,9 +18,7 @@ var w = window,
 var total_width = w.innerWidth || e.clientWidth || g.clientWidth;
 var total_height = w.innerHeight || e.clientHeight || g.clientHeight;
 
-// set chart size dimensions
-var sidebar_width = 180;
-// set margin for set of charts
+// set chart dimensions
 var dimensions = {
     page: {
         left: 20,
@@ -39,7 +37,8 @@ var dimensions = {
     },
     width: {
         chart: 0,
-        y_axis: 60
+        y_axis: 60,
+        sidebar: 180,
     },
 }
 
@@ -124,6 +123,7 @@ var field_settings = {
     }
 }
 
+// complete selectable metrics 
 for (var i in selectableMetrics) {
     if (!field_settings[selectableMetrics[i]]) {
         field_settings[selectableMetrics[i]] = {
@@ -134,7 +134,9 @@ for (var i in selectableMetrics) {
     }
 }
 
-// global variables
+// GLOBAL VARIABLES 
+
+// state
 var state = {
     to_plot: [],
     scales: [],
@@ -152,25 +154,29 @@ var histogramPacketNum = [] // array to be used to create overview histogram
 var number_of_packets;
 
 var dataset; // all packets, sorted by pcap_secs
-var stream2packetsDict = {};
-var stream2packetsArray = [];
-var addresses = {}
+var stream2packetsDict = {}; // look up values and direction by streamId
+var stream2packetsArray = []; // array of stream ids
+var addresses = {
+        "badpacket": {
+            "name": "bad_packet"
+        },
+        "null": {
+            "name": "null"
+        }
+    } // look up dictionary for alias name and direction by mac address
 
-var zoom_duration = 750;
+var zoom_duration = 750; // how long does transition on zoom take
+var zoom_stack = []; // keep track of past zoom domain (pcap secs)
 
-// pcap axis
+// x (pcap) axis for all charts
 var pcapSecsAxis = d3.svg.axis()
     .tickFormat(hourMinuteMilliseconds)
     .orient('bottom')
     .ticks(5);
 
-// to manage zooming
-var zoom_stack = [];
-
-// set up brush and brushed function
+// brush object for zooming using top level histogram chart
 var brush = d3.svg.brush()
     .on("brushend", function() {
-
         zoom_stack = [brush.empty() ? state.scales['pcap_secs_fixed'].domain() : brush.extent()];
         update_pcaps_domain(zoom_stack[0], false);
     });
@@ -188,20 +194,18 @@ function scaled(name) {
     }
 }
 
-// get data & visualize
+// get data & visualize [main function!]
 d3.json('/json/' + decodeURIComponent(get_query_param('key')[0]), function(error, json) {
     if (error) return console.error('error', error);
-
-    var begin = new Date().getTime();
 
     // update title
     document.getElementById("title").innerHTML = json.filename;
 
+    // set up 
     init(json);
-    draw();
 
-    var end = new Date().getTime();
-    log('Spent on visualization ' + ((end - begin) / 1000) + ' sec.');
+    // visualize
+    draw();
 })
 
 function init(json) {
@@ -209,62 +213,66 @@ function init(json) {
     // Packets w/o seq?
     dataset = json.js_packets;
 
+    // get list of desired plots
     state.to_plot = get_query_param('to_plot');
 
-    // Leave only packets that have all the fields that we want to plot
-    sanitize_dataset();
-
+    // sort by x values
     dataset.sort(function(x, y) {
         return x['pcap_secs'] - y['pcap_secs'];
     });
 
-    // TODO(katepek): Recalculate and redraw when resized
+    // Question: is there a height/width ratio that we actually want?
     dimensions.height.per_chart = Math.max((total_height - dimensions.height.overview - dimensions.page.top - (state.to_plot.length + 1) * (dimensions.height.above_charts + dimensions.height.below_charts + dimensions.height.x_axis)) / state.to_plot.length, 100);
-    dimensions.width.chart = total_width - dimensions.page.left - dimensions.width.y_axis - sidebar_width;
+    dimensions.width.chart = total_width - dimensions.page.left - dimensions.width.y_axis - dimensions.width.sidebar;
 
     var x_range = [0, dimensions.width.chart];
     var y_range = [dimensions.height.per_chart, 0];
 
-    log('total_height = ' + total_height);
-    log('height = ' + dimensions.height.per_chart);
-
+    // set d3 scales
     add_scale('pcap_secs', x_range);
     state.to_plot.forEach(function(d) {
         add_scale(d, y_range)
     });
-    // add scale for legend, based on pcap_secs scale
+
+    // add fixed pcaps scale for header histogram nav chart
     state.scales['pcap_secs_fixed'] = d3.scale.linear().domain(state.scales['pcap_secs'].domain()).range(state.scales['pcap_secs'].range());
 
+    // use data to update pcap secs
     pcapSecsAxis.scale(state.scales['pcap_secs']);
 
-    // get array of all packetSecs and use a histogram
+    // define array of all packet seconds, for use with histogram
     var packetSecs = []
 
+    // set up addresses w/ aliases
     for (var a in json.aliases) {
         addresses[a.replace(/:/gi, "")] = {
             "name": json.aliases[a]
         }
     }
 
-    addresses['badpacket'] = {
-        "name": "bad_packet"
-    }
-
     dataset.forEach(function(d) {
+
+        // replace ta/ra if packet is bad, or ta is null
         if (d.bad == 1) {
             d.ta = 'badpacket';
             d.ra = 'badpacket';
         }
+        if (d.ta == null) {
+            d.ta = 'null';
+        }
+
         // store time of packet
         packetSecs.push(d.pcap_secs)
 
-        // track streams
+        // string handling
+        // to do -> use numeric dictionary for ta, ra, and stream ids instead of passing strings around (?)
         var streamId = to_stream_key(d);
         d.ta = d.ta.replace(/:/gi, "")
         d.ra = d.ra.replace(/:/gi, "")
 
-        // Should I check if type already exists?  Or just assign?  Which is faster?
+        // use dsmode from each packet to define addresses as access or stations, use later to define streams as downstream/upstream
         // Logic: if dsmode = 2, then assign as downstream. If dsmode == 1, then assign as upstream. If dsmode 
+        // question: better to check if type exists, or overwrite as I'm doing here?
         if (d.dsmode == 2) {
             addresses[d.ta].type = "access";
             addresses[d.ra].type = "station"
@@ -283,7 +291,10 @@ function init(json) {
             }
         }
 
+        // add stream id to packet data
         d.streamId = streamId;
+
+        // add packet to values in stream dictionary
         if (!stream2packetsDict[streamId]) {
             stream2packetsDict[streamId] = {
                 values: [d]
@@ -294,6 +305,7 @@ function init(json) {
         }
     })
 
+    // use mac address station/access definitions to define per stream direction (upstream/downstream)
     stream2packetsArray.forEach(function(stream) {
         var k = to_ta_ra_from_stream_key(stream);
         if (addresses[k[0]].type == 'access' || addresses[k[1]].type == 'station') {
@@ -301,11 +313,12 @@ function init(json) {
         } else if (addresses[k[1]].type == 'access' || addresses[k[0]].type == 'station') {
             stream2packetsDict[stream].direction = 'upstream';
         } else {
-            console.log(stream, 'direction not found')
+            log(stream, 'direction not found')
         }
     })
 
     // set up histogram with 1000 bins
+    // TODO: use better way to define number of bins?
     number_of_packets = packetSecs.length;
     histogramPacketNum = d3.layout.histogram().bins(1000)(packetSecs);
 
@@ -354,72 +367,6 @@ function complement_stream_id(key) {
     return z[3] + "---" + z[1]
 }
 
-// helper functions for init
-function get_query_param(param) {
-    var urlKeyValuePairs = {}
-    window.location.href.split("#")[1].split("&").forEach(function(d) {
-        var m = d.split("=");
-        urlKeyValuePairs[m[0]] = m[1]
-    })
-    return urlKeyValuePairs[param].split(',')
-}
-
-var excludedData = {
-    'no_pcap_value': {
-        count: 0
-    },
-    'non_positive_pcap_value': {
-        count: 0
-    },
-    'type_ack': {
-        count: 0
-    },
-    'null_ta': {
-        count: 0
-    },
-    'null_ra': {
-        count: 0
-    },
-    'missing_plottype': {
-        count: 0
-    }
-}
-
-function sanitize_dataset() {
-    var before = dataset.length;
-    log('Before filtering: ' + dataset.length);
-    dataset = dataset.filter(function(d) {
-        if (!d['pcap_secs']) {
-            excludedData.no_pcap_value.count++;
-        }
-        if (d['pcap_secs'] <= 0) {
-            excludedData.non_positive_pcap_value.count++;
-        }
-
-        // exclude ACK
-        if (d['typestr'] == '1D ACK') {
-            excludedData.type_ack.count++;
-            return false;
-        }
-
-        // exclude null ta (remove this?)
-        if (!d['ta']) {
-            excludedData.null_ta.count++;
-            return false;
-        }
-
-        for (var idx in state.to_plot) {
-            if (!d.hasOwnProperty(state.to_plot[idx])) {
-                excludedData.missing_plottype.count++;
-            }
-        }
-        return true;
-    });
-    log(excludedData)
-    log("Percent of packets removed: ", (before - dataset.length) / before)
-    log('After filtering: ' + dataset.length);
-}
-
 function add_scale(field, range) {
     state.scales[field] = d3.scale[field_settings[field]['scale_type']]()
         .domain([d3.min(dataset, function(d) {
@@ -436,6 +383,7 @@ function add_scale(field, range) {
     }
 }
 
+// visualize the data
 function draw() {
     add_butter_bar();
 
@@ -448,6 +396,7 @@ function draw() {
     add_legend();
 }
 
+// overview chart at top: show packet distribution over time, and use for panning/zooming
 function add_overview() {
     var max = 0;
 
@@ -616,7 +565,7 @@ d3.select('#tooltip')
     .style('top', dimensions.page.top + 'px')
     .classed('hidden', true)
     .append("svg")
-    .attr("width", sidebar_width - 10)
+    .attr("width", dimensions.width.sidebar - 10)
     .attr("height", availableMetrics.length * dimensions.height.tooltip)
     .selectAll('.tooltipValues')
     .data(availableMetrics)
@@ -628,8 +577,6 @@ d3.select('#tooltip')
     });
 
 function visualize(field) {
-    log('About to visualize ' + field);
-
     // set up main svg for plot
     var mainChart = d3.select('body')
         .append('svg')
