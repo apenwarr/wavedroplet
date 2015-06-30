@@ -156,7 +156,14 @@ var number_of_packets;
 var dataset; // all packets, sorted by pcap_secs
 var stream2packetsDict = {}; // look up values and direction by streamId
 var stream2packetsArray = []; // array of stream ids
-var addresses = {} // look up direction and alias name by mac address
+var addresses = {
+        "badpacket": {
+            "name": "bad_packet"
+        },
+        "null": {
+            "name": "null"
+        }
+    } // look up dictionary for alias name and direction by mac address
 
 var zoom_duration = 750; // how long does transition on zoom take
 var zoom_stack = []; // keep track of past zoom domain (pcap secs)
@@ -221,49 +228,51 @@ function init(json) {
     var x_range = [0, dimensions.width.chart];
     var y_range = [dimensions.height.per_chart, 0];
 
+    // set d3 scales
     add_scale('pcap_secs', x_range);
     state.to_plot.forEach(function(d) {
         add_scale(d, y_range)
     });
-    // add scale for legend, based on pcap_secs scale
+
+    // add fixed pcaps scale for header histogram nav chart
     state.scales['pcap_secs_fixed'] = d3.scale.linear().domain(state.scales['pcap_secs'].domain()).range(state.scales['pcap_secs'].range());
 
+    // use data to update pcap secs
     pcapSecsAxis.scale(state.scales['pcap_secs']);
 
-    // get array of all packetSecs and use a histogram
+    // define array of all packet seconds, for use with histogram
     var packetSecs = []
 
+    // set up addresses w/ aliases
     for (var a in json.aliases) {
         addresses[a.replace(/:/gi, "")] = {
             "name": json.aliases[a]
         }
     }
 
-    addresses.badpacket = {
-        "name": "bad_packet"
-    }
-    addresses.null = {
-        "name": "null"
-    }
-
     dataset.forEach(function(d) {
+
+        // replace ta/ra if packet is bad, or ta is null
         if (d.bad == 1) {
             d.ta = 'badpacket';
             d.ra = 'badpacket';
         }
-        // store time of packet
-        packetSecs.push(d.pcap_secs)
-
-        // track streams
         if (d.ta == null) {
             d.ta = 'null';
         }
+
+        // store time of packet
+        packetSecs.push(d.pcap_secs)
+
+        // string handling
+        // to do -> use numeric dictionary for ta, ra, and stream ids instead of passing strings around (?)
         var streamId = to_stream_key(d);
         d.ta = d.ta.replace(/:/gi, "")
         d.ra = d.ra.replace(/:/gi, "")
 
-        // Should I check if type already exists?  Or just assign?  Which is faster?
+        // use dsmode from each packet to define addresses as access or stations, use later to define streams as downstream/upstream
         // Logic: if dsmode = 2, then assign as downstream. If dsmode == 1, then assign as upstream. If dsmode 
+        // question: better to check if type exists, or overwrite as I'm doing here?
         if (d.dsmode == 2) {
             addresses[d.ta].type = "access";
             addresses[d.ra].type = "station"
@@ -282,7 +291,10 @@ function init(json) {
             }
         }
 
+        // add stream id to packet data
         d.streamId = streamId;
+
+        // add packet to values in stream dictionary
         if (!stream2packetsDict[streamId]) {
             stream2packetsDict[streamId] = {
                 values: [d]
@@ -293,6 +305,7 @@ function init(json) {
         }
     })
 
+    // use mac address station/access definitions to define per stream direction (upstream/downstream)
     stream2packetsArray.forEach(function(stream) {
         var k = to_ta_ra_from_stream_key(stream);
         if (addresses[k[0]].type == 'access' || addresses[k[1]].type == 'station') {
@@ -305,6 +318,7 @@ function init(json) {
     })
 
     // set up histogram with 1000 bins
+    // TODO: use better way to define number of bins?
     number_of_packets = packetSecs.length;
     histogramPacketNum = d3.layout.histogram().bins(1000)(packetSecs);
 
@@ -353,37 +367,6 @@ function complement_stream_id(key) {
     return z[3] + "---" + z[1]
 }
 
-// helper functions for init
-function get_query_param(param) {
-    var urlKeyValuePairs = {}
-    window.location.href.split("#")[1].split("&").forEach(function(d) {
-        var m = d.split("=");
-        urlKeyValuePairs[m[0]] = m[1]
-    })
-    return urlKeyValuePairs[param].split(',')
-}
-
-var excludedData = {
-    'no_pcap_value': {
-        count: 0
-    },
-    'non_positive_pcap_value': {
-        count: 0
-    },
-    'type_ack': {
-        count: 0
-    },
-    'null_ta': {
-        count: 0
-    },
-    'null_ra': {
-        count: 0
-    },
-    'missing_plottype': {
-        count: 0
-    }
-}
-
 function add_scale(field, range) {
     state.scales[field] = d3.scale[field_settings[field]['scale_type']]()
         .domain([d3.min(dataset, function(d) {
@@ -400,6 +383,7 @@ function add_scale(field, range) {
     }
 }
 
+// visualize the data
 function draw() {
     add_butter_bar();
 
@@ -412,6 +396,7 @@ function draw() {
     add_legend();
 }
 
+// overview chart at top: show packet distribution over time, and use for panning/zooming
 function add_overview() {
     var max = 0;
 
