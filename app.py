@@ -312,7 +312,11 @@ def _MaybeCache(blob_info, pcapdata, start_time, end_time):
     print 'saving %d with %d elements (%d bytes)' % (i, len(g), len(gstr))
     memcache.set(key='%s_%d' % (prefix, i), value=gstr, namespace='jsdata')
 
-  pairs_dict = [{'ta': t[0], 'ra': t[1]} for t in pairs]
+  # TODO: don't need streams or start_times, so don't precalculate these above
+
+  #jscache = dict(js_streams=pairs_dict,
+  #               start_times=start_times)
+
   jscache = dict()
   memcache.set(key=prefix, value=jscache, namespace='jsindex')
 
