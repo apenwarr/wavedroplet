@@ -18,9 +18,7 @@ var w = window,
 var total_width = w.innerWidth || e.clientWidth || g.clientWidth;
 var total_height = w.innerHeight || e.clientHeight || g.clientHeight;
 
-// set chart size dimensions
-var sidebar_width = 180;
-// set margin for set of charts
+// set chart dimensions
 var dimensions = {
     page: {
         left: 20,
@@ -39,7 +37,8 @@ var dimensions = {
     },
     width: {
         chart: 0,
-        y_axis: 60
+        y_axis: 60,
+        sidebar: 180,
     },
 }
 
@@ -220,7 +219,7 @@ function init(json) {
 
     // TODO(katepek): Recalculate and redraw when resized
     dimensions.height.per_chart = Math.max((total_height - dimensions.height.overview - dimensions.page.top - (state.to_plot.length + 1) * (dimensions.height.above_charts + dimensions.height.below_charts + dimensions.height.x_axis)) / state.to_plot.length, 100);
-    dimensions.width.chart = total_width - dimensions.page.left - dimensions.width.y_axis - sidebar_width;
+    dimensions.width.chart = total_width - dimensions.page.left - dimensions.width.y_axis - dimensions.width.sidebar;
 
     var x_range = [0, dimensions.width.chart];
     var y_range = [dimensions.height.per_chart, 0];
@@ -616,7 +615,7 @@ d3.select('#tooltip')
     .style('top', dimensions.page.top + 'px')
     .classed('hidden', true)
     .append("svg")
-    .attr("width", sidebar_width - 10)
+    .attr("width", dimensions.width.sidebar - 10)
     .attr("height", availableMetrics.length * dimensions.height.tooltip)
     .selectAll('.tooltipValues')
     .data(availableMetrics)
