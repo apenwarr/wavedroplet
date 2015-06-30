@@ -37,8 +37,8 @@
     .axis path,
     .axis line {
       fill: none;
-      stroke: black;
-      stroke-width: 1px;
+      stroke: grey;
+      stroke-width: .8px;
       shape-rendering: crispEdges;  
     }
 

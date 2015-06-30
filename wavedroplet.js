@@ -184,9 +184,9 @@ var boolean_area = false // show boolean area charts
 
 // x (pcap) axis for all charts
 var pcapSecsAxis = d3.svg.axis()
-    .tickFormat(hourMinuteMilliseconds)
+    .tickFormat(milliseconds)
     .orient('bottom')
-    .ticks(5);
+    .ticks(3);
 
 // brush object for zooming using top level histogram chart
 var brush = d3.svg.brush()
@@ -1452,5 +1452,5 @@ function hourMinuteMilliseconds(d) {
 }
 
 function milliseconds(d) {
-    return d3.time.format("%L")(new Date(d * 1000))
+    return d3.time.format("%Ss %Lms")(new Date(d * 1000))
 }
