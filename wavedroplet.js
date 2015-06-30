@@ -154,7 +154,7 @@ var number_of_packets;
 var dataset; // all packets, sorted by pcap_secs
 var stream2packetsDict = {};
 var stream2packetsArray = [];
-var aliases = {}
+var addresses = {}
 
 var zoom_duration = 750;
 
@@ -241,9 +241,14 @@ function init(json) {
     var packetSecs = []
 
     for (var a in json.aliases) {
-        aliases[a.replace(/:/gi, "")] = json.aliases[a]
+        addresses[a.replace(/:/gi, "")] = {
+            "name": json.aliases[a]
+        }
     }
-    aliases['badpacket'] = "bad_packet"
+
+    addresses['badpacket'] = {
+        "name": "bad_packet"
+    }
 
     dataset.forEach(function(d) {
         if (d.bad == 1) {
@@ -258,14 +263,24 @@ function init(json) {
         d.ta = d.ta.replace(/:/gi, "")
         d.ra = d.ra.replace(/:/gi, "")
 
-        if (d.dsmode == 1) {
-            d.access = d.ra;
-            d.station = d.ta;
-        } else {
-            // treat 3 as if it were 2, since bad packets
-            // treat 0 as if it were 2, since ta must be access point
-            d.access = d.ta;
-            d.station = d.ra;
+        // Should I check if type already exists?  Or just assign?  Which is faster?
+        // Logic: if dsmode = 2, then assign as downstream. If dsmode == 1, then assign as upstream. If dsmode 
+        if (d.dsmode == 2) {
+            addresses[d.ta].type = "access";
+            addresses[d.ra].type = "station"
+        } else if (d.dsmode == 1) {
+            addresses[d.ra].type = "access";
+            addresses[d.ta].type = "station"
+        } else if (d.dsmode == 0) {
+            if (addresses[d.ta].type == 'access') {
+                addresses[d.ra].type = "station"
+            } else if (addresses[d.ta].type == 'station') {
+                addresses[d.ra].type = "access"
+            } else if (addresses[d.ra].type == 'access') {
+                addresses[d.ta].type = "station"
+            } else if (addresses[d.ra].type == 'station') {
+                addresses[d.ta].type = "access"
+            }
         }
 
         d.streamId = streamId;
@@ -276,6 +291,17 @@ function init(json) {
             stream2packetsArray.push(streamId);
         } else {
             stream2packetsDict[streamId].values.push(d);
+        }
+    })
+
+    stream2packetsArray.forEach(function(stream) {
+        var k = to_ta_ra_from_stream_key(stream);
+        if (addresses[k[0]].type == 'access' || addresses[k[1]].type == 'station') {
+            stream2packetsDict[stream].direction = 'downstream';
+        } else if (addresses[k[1]].type == 'access' || addresses[k[0]].type == 'station') {
+            stream2packetsDict[stream].direction = 'upstream';
+        } else {
+            console.log(stream, 'direction not found')
         }
     })
 
@@ -313,7 +339,12 @@ function to_stream_key(d) {
 
 function to_visible_stream_key(streamId) {
     var z = streamId.match(/(([a-z]|[A-Z]|[0-9])+)---(([a-z]|[A-Z]|[0-9])+)/)
-    return aliases[z[1]] + '→' + aliases[z[3]];
+    return addresses[z[1]].name + '→' + addresses[z[3]].name;
+}
+
+function to_ta_ra_from_stream_key(streamId) {
+    var z = streamId.match(/(([a-z]|[A-Z]|[0-9])+)---(([a-z]|[A-Z]|[0-9])+)/)
+    return [z[1], z[3]];
 }
 
 function complement_stream_id(key) {
@@ -519,31 +550,6 @@ function add_legend() {
     var key_length = font_width * 40;
     var n_cols = Math.floor(dimensions.width.chart / key_length);
     var n_rows = Math.ceil(stream2packetsArray.length / n_cols)
-
-
-    for (var i in stream2packetsArray) {
-        var streamId = stream2packetsArray[i];
-        var count = stream2packetsDict[streamId].values.length;
-        var dsmode = [
-            [],
-            [],
-            [],
-            []
-        ]
-
-        // find types associated with each mode
-        stream2packetsDict[streamId].values.forEach(function(d, i) {
-            if (dsmode[d.dsmode].indexOf(d.typestr) == -1) {
-                dsmode[d.dsmode].push(d.typestr)
-            }
-        })
-
-        // label as dsmode 2 or 1: 2 by default, 1 if any of the packets have a dsmode of 1
-        stream2packetsDict[streamId].dsmode = 2;
-        if (dsmode[1].length != 0) {
-            stream2packetsDict[streamId].dsmode = 1;
-        }
-    }
     var legend_line_height = 24;
 
     d3.select('body')
@@ -561,7 +567,7 @@ function add_legend() {
             return 'legend stream_' + d +
                 ' ta_' + d.split("---")[0] +
                 ' ra_' + d.split("---")[1] +
-                ' dsmode_' + stream2packetsDict[d].dsmode;
+                ' direction' + stream2packetsDict[d].direction;
         })
         .attr('x', function(d, i) {
             return (i % n_cols) * key_length
@@ -574,11 +580,17 @@ function add_legend() {
             return to_visible_stream_key(d)
         })
         .on('click', function(d) {
+            var direction = "downstream";
+            var ta = d.split("---")[0];
+            var ra = d.split("---")[1];
+            if (addresses[ta].type == 'station' || addresses[ra].type == 'access') {
+                direction = "upstream";
+            }
             highlight_stream({
                 'streamId': d,
-                'ta': d.split("---")[0],
-                'ra': d.split("---")[1],
-                'dsmode': stream2packetsDict[streamId].dsmode
+                'ta': ta,
+                'ra': ra,
+                'direction': direction,
             })
         });
 }
@@ -837,7 +849,7 @@ function enter_boolean_boxes_by_dataset(fieldName, svg) {
         })
         .attr('width', 2)
         .attr('height', function(d) {
-            if (determine_selected_class(d) == "" || determine_selected_class(d) == "bad") {
+            if (determine_selected_class(d) == "" || determine_selected_class(d) == "badpacket") {
                 return dimensions.height.per_chart * dimensions.height.bar_factor_unselected
             } else {
                 return dimensions.height.per_chart * dimensions.height.bar_factor_selected
@@ -876,7 +888,7 @@ function enter_retrybad_boxes_by_dataset(svg) {
         .attr('width', 1)
         .attr('height', function(d) {
             // selected rectangles are taller/longer
-            if (determine_selected_class(d) == "" || determine_selected_class(d) == "bad") {
+            if (determine_selected_class(d) == "" || determine_selected_class(d) == "badpacket") {
                 return dimensions.height.per_chart * dimensions.height.bar_factor_unselected
             } else {
                 return dimensions.height.per_chart * dimensions.height.bar_factor_selected
@@ -899,10 +911,10 @@ function enter_retrybad_boxes_by_dataset(svg) {
 
 function determine_selected_class(d) {
     if (d.bad == 1) {
-        return 'bad'
+        return 'badpacket'
     } else if (!state.selected_data.stream || state.selected_data.stream == null) {
         return "";
-    } else if (d.dsmode == 1) {
+    } else if (stream2packetsDict[stream].direction == "upstream") {
         if (state.selected_data.stream == d.streamId) {
             return 'selected_upstream';
         } else if (state.selected_data.access == d.ta && state.selected_data.station == d.ra) {
@@ -1128,50 +1140,6 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
         x_start: [],
         x_diff: 0
     };
-    /*
-    var drag = d3.behavior.drag()
-        .on("dragstart", function() {
-            drag_metrics.start = d3.mouse(this)[0]
-            svg.append("rect")
-                .attr("height", dimensions.height.per_chart)
-                .attr("width", 1)
-                .attr("fill", "black")
-                .attr("opacity", .1)
-                .attr("x", drag_metrics.start)
-                .attr("y", 0)
-                .attr("class", "drag_rect")
-        })
-        .on("drag", function(d) {
-            drag_metrics.x_diff = d3.mouse(this)[0] - drag_metrics.start
-            d3.select(".drag_rect").attr("width", drag_metrics.x_diff)
-        })
-        .on("dragend", function() {
-            if (drag_metrics.x_diff > 5) {
-                d3.select(".drag_rect").transition().duration(500).attr("x", 0).attr("width", dimensions.width.chart)
-                zoom_stack[zoom_stack.length] = state.scales['pcap_secs'].domain();
-
-                // define new domain, and update
-                var newDomain = [
-                    state.scales['pcap_secs'].invert(drag_metrics.x_start),
-                    state.scales['pcap_secs'].invert(d3.mouse(this)[0])
-                ];
-
-                state.scales['pcap_secs'].domain(newDomain)
-                brush.extent(newDomain)
-                d3.selectAll(".brush").call(brush)
-
-                update_pcaps_domain(newDomain)
-                drag_metrics = {
-                    x_start: [],
-                    x_diff: 0
-                };
-                mouse_start_pos = null;
-                dragging = false;
-            } else {
-                zoomOut()
-            }
-            d3.selectAll(".drag_rect").transition().delay(2000).remove()
-        });*/
 
     svg.append('rect')
         .attr('width', dimensions.width.chart)
@@ -1416,7 +1384,7 @@ function update_show_Tooltip(data) {
                 return k + ": " + to_visible_stream_key(data[k]);
             }
             if (k == "ta" || k == "ra") {
-                return k + ": " + aliases[data[k]]
+                return k + ": " + addresses[data[k]].name
             }
             return k + ": " + data[k]
         });
@@ -1431,10 +1399,11 @@ function highlight_stream(d) {
     d3.selectAll(".selected_partialMatch_downstream").classed("selected_partialMatch_downstream", false).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_unselected)
     d3.selectAll(".selected_partialMatch_upstream").classed("selected_partialMatch_upstream", false).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_unselected)
 
-    if (d.bad != 1) {
-        d3.selectAll(".bad").classed("selected_bad", false);
+    if (d.streamId != "badpacket---badpacket") {
+        d3.selectAll(".selected_bad").classed("selected_bad", false);
+        d3.selectAll(".stream_badpacket---badpacket").filter('.legend').classed("selected_bad", false);
 
-        if (d.dsmode == 1) {
+        if (stream2packetsDict[d.streamId].direction == "upstream") {
 
             d3.selectAll(".stream_" + d.streamId).classed("selected_upstream", true).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_selected)
             d3.selectAll(".stream_" + complement_stream_id(d.streamId)).classed("selected_downstream", true).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_selected)
@@ -1448,7 +1417,8 @@ function highlight_stream(d) {
             d3.selectAll(".ra_" + d.ra).classed("selected_partialMatch_downstream", true).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_selected)
         }
     } else {
-        d3.selectAll(".bad").classed("selected_bad", true);
+        d3.selectAll(".badpacket").classed("selected_bad", true);
+        d3.selectAll(".stream_badpacket---badpacket").filter('.legend').classed("selected_bad", true);
     }
 
 }
@@ -1461,7 +1431,7 @@ function select_stream(d) {
         // which is not possible from the points since you can only mouseover your state.selected_data.stream
 
         state.selected_data.stream = d.streamId;
-        if (d.dsmode == 1) {
+        if (stream2packetsDict[d.streamId].direction == "upstream") {
             state.selected_data.access = d.ta;
             state.selected_data.station = d.ra;
         } else {
