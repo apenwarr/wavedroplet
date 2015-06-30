@@ -1,7 +1,7 @@
 "use strict";
 
 // debugging
-var debug = true;
+var debug = false;
 
 function log(o) {
     if (debug) {
@@ -208,6 +208,8 @@ d3.json('/json/' + decodeURIComponent(get_query_param('key')[0]), function(error
     draw();
 })
 
+var j;
+
 function init(json) {
     // TODO(katepek): Should sanitize here? E.g., discard bad packets?
     // Packets w/o seq?
@@ -244,64 +246,72 @@ function init(json) {
     var packetSecs = []
 
     // set up addresses w/ aliases
+    j = json.aliases
     for (var a in json.aliases) {
         addresses[a.replace(/:/gi, "")] = {
             "name": json.aliases[a]
         }
     }
 
+    // get user selection regarding "1D Ack"
+    var show_ack = get_query_param('ack')[0];
+
     dataset.forEach(function(d) {
 
-        // replace ta/ra if packet is bad, or ta is null
-        if (d.bad == 1) {
-            d.ta = 'badpacket';
-            d.ra = 'badpacket';
-        }
-        if (d.ta == null) {
-            d.ta = 'null';
-        }
+        // check for 1D ACK and skip, if appropriate
+        if (!(show_ack == false & d.type_str == "1D ACK")) {
 
-        // store time of packet
-        packetSecs.push(d.pcap_secs)
-
-        // string handling
-        // to do -> use numeric dictionary for ta, ra, and stream ids instead of passing strings around (?)
-        var streamId = to_stream_key(d);
-        d.ta = d.ta.replace(/:/gi, "")
-        d.ra = d.ra.replace(/:/gi, "")
-
-        // use dsmode from each packet to define addresses as access or stations, use later to define streams as downstream/upstream
-        // Logic: if dsmode = 2, then assign as downstream. If dsmode == 1, then assign as upstream. If dsmode 
-        // question: better to check if type exists, or overwrite as I'm doing here?
-        if (d.dsmode == 2) {
-            addresses[d.ta].type = "access";
-            addresses[d.ra].type = "station"
-        } else if (d.dsmode == 1) {
-            addresses[d.ra].type = "access";
-            addresses[d.ta].type = "station"
-        } else if (d.dsmode == 0) {
-            if (addresses[d.ta].type == 'access') {
-                addresses[d.ra].type = "station"
-            } else if (addresses[d.ta].type == 'station') {
-                addresses[d.ra].type = "access"
-            } else if (addresses[d.ra].type == 'access') {
-                addresses[d.ta].type = "station"
-            } else if (addresses[d.ra].type == 'station') {
-                addresses[d.ta].type = "access"
+            // replace ta/ra if packet is bad, or ta is null
+            if (d.bad == 1) {
+                d.ta = 'badpacket';
+                d.ra = 'badpacket';
             }
-        }
+            if (d.ta == null) {
+                d.ta = 'null';
+            }
 
-        // add stream id to packet data
-        d.streamId = streamId;
+            // store time of packet
+            packetSecs.push(d.pcap_secs)
 
-        // add packet to values in stream dictionary
-        if (!stream2packetsDict[streamId]) {
-            stream2packetsDict[streamId] = {
-                values: [d]
-            };
-            stream2packetsArray.push(streamId);
-        } else {
-            stream2packetsDict[streamId].values.push(d);
+            // string handling
+            // to do -> use numeric dictionary for ta, ra, and stream ids instead of passing strings around (?)
+            var streamId = to_stream_key(d);
+            d.ta = d.ta.replace(/:/gi, "")
+            d.ra = d.ra.replace(/:/gi, "")
+
+            // use dsmode from each packet to define addresses as access or stations, use later to define streams as downstream/upstream
+            // Logic: if dsmode = 2, then assign as downstream. If dsmode == 1, then assign as upstream. If dsmode 
+            // question: better to check if type exists, or overwrite as I'm doing here?
+            if (d.dsmode == 2) {
+                addresses[d.ta].type = "access";
+                addresses[d.ra].type = "station"
+            } else if (d.dsmode == 1) {
+                addresses[d.ra].type = "access";
+                addresses[d.ta].type = "station"
+            } else if (d.dsmode == 0) {
+                if (addresses[d.ta].type == 'access') {
+                    addresses[d.ra].type = "station"
+                } else if (addresses[d.ta].type == 'station') {
+                    addresses[d.ra].type = "access"
+                } else if (addresses[d.ra].type == 'access') {
+                    addresses[d.ta].type = "station"
+                } else if (addresses[d.ra].type == 'station') {
+                    addresses[d.ta].type = "access"
+                }
+            }
+
+            // add stream id to packet data
+            d.streamId = streamId;
+
+            // add packet to values in stream dictionary
+            if (!stream2packetsDict[streamId]) {
+                stream2packetsDict[streamId] = {
+                    values: [d]
+                };
+                stream2packetsArray.push(streamId);
+            } else {
+                stream2packetsDict[streamId].values.push(d);
+            }
         }
     })
 

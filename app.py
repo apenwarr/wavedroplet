@@ -243,9 +243,14 @@ class SaveHandler(_BaseHandler):
     capdefault.put()
     pcapdata.put()
 
-    self.redirect('/d3viz.html#key=%s&to_plot=%s'
+    ack = 'false'
+    if self.request.get('include-acks') == 'on':
+      ack = 'true'
+
+    self.redirect('/d3viz.html#key=%s&to_plot=%s&ack=%s'
                   % (_Esc(str(blob_info.key())),
-                  _Esc(','.join(pcapdata.show_fields))))
+                  _Esc(','.join(pcapdata.show_fields)),
+                  _Esc(ack)))
 
 class _CacheMissing(Exception):
   pass
