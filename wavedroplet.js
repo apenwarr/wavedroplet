@@ -186,7 +186,7 @@ var boolean_area = false // show boolean area charts
 var pcapSecsAxis = d3.svg.axis()
     .tickFormat(milliseconds)
     .orient('bottom')
-    .ticks(3);
+    .ticks(5);
 
 // brush object for zooming using top level histogram chart
 var brush = d3.svg.brush()
@@ -444,7 +444,7 @@ function add_overview() {
         .scale(state.scales['pcap_secs_fixed'])
         .tickFormat(hourMinuteMilliseconds)
         .orient('bottom')
-        .ticks(5);
+    .ticks(5);
 
     // start building the chart
     var overviewChart = d3
