@@ -21,7 +21,7 @@ var total_height = w.innerHeight || e.clientHeight || g.clientHeight;
 // set chart dimensions
 var dimensions = {
     page: {
-        left: 30,
+        left: 50,
         top: 30
     },
     height: {
@@ -437,8 +437,8 @@ function add_overview() {
     // set up x and y axis
     var overviewYaxis = d3.svg.axis()
         .scale(state.scales['packetNumPerTenth'])
-        .orient('right')
-        .ticks(3);
+        .orient('left')
+        .ticks(5);
 
     var overviewXaxis = d3.svg.axis()
         .scale(state.scales['pcap_secs_fixed'])
@@ -465,7 +465,6 @@ function add_overview() {
 
     overviewChart.append('g')
         .attr('class', 'axis y overview')
-        .attr('transform', 'translate(' + dimensions.width.chart + ', 0)')
         .call(overviewYaxis);
 
     // draw bars
@@ -815,9 +814,7 @@ function determine_selected_class(d) {
             return "";
         }
     }
-
 }
-
 
 function visualize_numbers(field, svg) {
     setup_crosshairs(field, svg)
@@ -841,15 +838,14 @@ function draw_rect_for_zooming(svg, height) {
     svg.append("rect")
         .attr("height", height)
         .attr("width", 0)
-        .attr("fill", "grey")
-        .attr("opacity", .1)
         .attr("x", 0)
         .attr("y", 0)
         .attr("class", "drag_rect hidden")
 }
 
 function draw_points(fieldName, svg) {
-    svg.append('g').attr("class", 'pcap_vs_' + fieldName + " metricChart").attr("fill", 'grey')
+    svg.append('g').attr("class", 'pcap_vs_' + fieldName + " metricChart")
+        .attr("fill", 'grey')
         .selectAll('.points')
         .data(dataset, function(d) {
             return d.pcap_secs
@@ -867,20 +863,20 @@ function draw_points(fieldName, svg) {
 function draw_metric_y_axis(svg, fieldName) {
     var yAxis = d3.svg.axis()
         .scale(state.scales[fieldName])
-        .orient('right')
+        .orient('left')
         .ticks(5);
 
     // y axis
     svg.append('g')
         .attr('class', 'axis y')
-        .attr('transform', 'translate(' + (dimensions.width.chart) + ',0)')
+        //  .attr('transform', 'translate(' + (dimensions.width.chart) + ',0)')
         .call(yAxis);
 }
 
 function draw_metric_x_axis(svg, fieldName) {
     // title for plot
     svg.append("text")
-        .attr('transform', 'translate(-10,' + field_settings[fieldName].translate_label + ') rotate(-90)')
+        .attr('transform', 'translate(-25,' + field_settings[fieldName].translate_label + ') rotate(-90)')
         .attr("class", "text-label")
         .text(fieldName);
 
