@@ -1,7 +1,7 @@
 "use strict";
 
 // debugging
-var debug = false;
+var debug = true;
 
 function log(o) {
     if (debug) {
@@ -204,13 +204,10 @@ d3.json('/json/' + decodeURIComponent(get_query_param('key')[0]), function(error
 function init(json) {
     // TODO(katepek): Should sanitize here? E.g., discard bad packets?
     // Packets w/o seq?
-    console.log(json)
     dataset = json.js_packets;
 
+    // get list of desired plots
     state.to_plot = get_query_param('to_plot');
-
-    // Leave only packets that have all the fields that we want to plot
-    sanitize_dataset();
 
     dataset.sort(function(x, y) {
         return x['pcap_secs'] - y['pcap_secs'];
@@ -244,8 +241,11 @@ function init(json) {
         }
     }
 
-    addresses['badpacket'] = {
+    addresses.badpacket = {
         "name": "bad_packet"
+    }
+    addresses.null = {
+        "name": "null"
     }
 
     dataset.forEach(function(d) {
@@ -257,6 +257,9 @@ function init(json) {
         packetSecs.push(d.pcap_secs)
 
         // track streams
+        if (d.ta == null) {
+            d.ta = 'null';
+        }
         var streamId = to_stream_key(d);
         d.ta = d.ta.replace(/:/gi, "")
         d.ra = d.ra.replace(/:/gi, "")
@@ -381,41 +384,6 @@ var excludedData = {
     'missing_plottype': {
         count: 0
     }
-}
-
-function sanitize_dataset() {
-    var before = dataset.length;
-    log('Before filtering: ' + dataset.length);
-    dataset = dataset.filter(function(d) {
-        if (!d['pcap_secs']) {
-            excludedData.no_pcap_value.count++;
-        }
-        if (d['pcap_secs'] <= 0) {
-            excludedData.non_positive_pcap_value.count++;
-        }
-
-        // exclude ACK
-        if (d['typestr'] == '1D ACK') {
-            excludedData.type_ack.count++;
-            return false;
-        }
-
-        // exclude null ta (remove this?)
-        if (!d['ta']) {
-            excludedData.null_ta.count++;
-            return false;
-        }
-
-        for (var idx in state.to_plot) {
-            if (!d.hasOwnProperty(state.to_plot[idx])) {
-                excludedData.missing_plottype.count++;
-            }
-        }
-        return true;
-    });
-    log(excludedData)
-    log("Percent of packets removed: ", (before - dataset.length) / before)
-    log('After filtering: ' + dataset.length);
 }
 
 function add_scale(field, range) {
