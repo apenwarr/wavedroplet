@@ -709,21 +709,6 @@ function visualize_retrybad(svg) {
     draw_rect_for_zooming(svg, dimensions.height.per_chart * field_settings['retry-bad'].height_factor)
 }
 
-
-// function to transform stack data into area charts
-var retrybad_percent_area = d3.svg.area()
-    .x(function(d) {
-        return state.scales['pcap_secs'](d.x);;
-    })
-    .y0(function(d) {
-        return dimensions.height.per_chart * (1 - dimensions.height.split_factor) * d.y0 +
-            dimensions.height.per_chart * dimensions.height.split_factor;
-    })
-    .y1(function(d) {
-        return dimensions.height.per_chart * (1 - dimensions.height.split_factor) * (d.y + d.y0) +
-            dimensions.height.per_chart * dimensions.height.split_factor;
-    });
-
 function enter_boolean_boxes_by_dataset(fieldName, svg) {
 
     svg.enter()
@@ -942,8 +927,10 @@ function update_pcaps_domain(newDomain, transition_bool) {
         }
 
         if (field_settings[fieldName].value_type == 'boolean') {
+            /* percent area
             d3.selectAll(".percent_area_chart_boolean_" + fieldName)
                 .attr("d", boolean_percent_of_total_area_setup(trimmed_data, fieldName, scaled('pcap_secs')));
+                */
 
             var bool_boxes_current = d3.select(".boolean_boxes_" + fieldName)
                 .selectAll(".bool_boxes_rect_" + fieldName)
@@ -989,10 +976,12 @@ function update_pcaps_domain(newDomain, transition_bool) {
             enter_retrybad_boxes_by_dataset(bool_boxes_current)
 
             // PERCENT CHART
+            /* percent area
             d3.selectAll(".percent_area")
                 .attr("d", function(d) {
                     return retrybad_percent_area(d);
                 })
+*/
         }
 
 
@@ -1355,9 +1344,7 @@ function draw_boolean_percent_chart(field, svg) {
         .attr("class", "percent_area_chart_boolean_" + field)
         .attr("d", boolean_percent_of_total_area_setup(dataset, field, scaled('pcap_secs')));
 }
-*/
 
-/*
 function boolean_percent_of_total_area_setup(data, currentField, xFunc) {
 
     // percent 1 vs 0
@@ -1382,9 +1369,7 @@ function boolean_percent_of_total_area_setup(data, currentField, xFunc) {
 
     return k(data)
 }
-*/
 
-/*
 function draw_retrybad_percent_chart(svg) {
     // set up data for rolling average
     var runningSeq = {
@@ -1458,4 +1443,19 @@ function draw_retrybad_percent_chart(svg) {
         });
 
 }
+
+// function to transform stack data into area charts
+var retrybad_percent_area = d3.svg.area()
+    .x(function(d) {
+        return state.scales['pcap_secs'](d.x);;
+    })
+    .y0(function(d) {
+        return dimensions.height.per_chart * (1 - dimensions.height.split_factor) * d.y0 +
+            dimensions.height.per_chart * dimensions.height.split_factor;
+    })
+    .y1(function(d) {
+        return dimensions.height.per_chart * (1 - dimensions.height.split_factor) * (d.y + d.y0) +
+            dimensions.height.per_chart * dimensions.height.split_factor;
+    });
+
 */
