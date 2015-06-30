@@ -21,7 +21,7 @@ var total_height = w.innerHeight || e.clientHeight || g.clientHeight;
 // set chart dimensions
 var dimensions = {
     page: {
-        left: 20,
+        left: 30,
         top: 30
     },
     height: {
@@ -29,11 +29,12 @@ var dimensions = {
         overview: 80,
         x_axis: 20,
         above_charts: 5,
-        below_charts: 30,
+        below_charts: 10,
         tooltip: 15,
         bar_factor_unselected: .12,
         bar_factor_selected: .15,
-        split_factor: .60
+        split_factor: .4,
+        butter_bar: 30
     },
     width: {
         chart: 0,
@@ -88,38 +89,45 @@ var field_settings = {
     'seq': {
         'value_type': 'number',
         'scale_type': 'linear',
-        'height_factor': 1
+        'height_factor': 1,
+        'translate_label': 60
     },
     'rate': {
         'value_type': 'number',
         'scale_type': 'linear',
-        'height_factor': 1
+        'height_factor': 1,
+        'translate_label': 60
     },
     'retry-bad': {
         'value_type': 'retrybad',
         'scale_type': 'linear',
-        'height_factor': .55
+        'height_factor': .6,
+        'translate_label': 60
     },
     'retry': {
         'value_type': 'boolean',
         'scale_type': 'linear',
-        'height_factor': .4
+        'height_factor': dimensions.height.split_factor,
+        'translate_label': 60
     },
     'bad': {
         'value_type': 'boolean',
         'scale_type': 'linear',
-        'height_factor': .6
+        'height_factor': dimensions.height.split_factor,
+        'translate_label': 60
     },
     'bw': {
         'value_type': 'boolean',
         'scale_type': 'linear',
-        'height_factor': .4
+        'height_factor': dimensions.height.split_factor,
+        'translate_label': 60
     },
     // note - spatial streams is actually values of 1 and 2, rather than 0 and 1 - this works, but is a hack
     'spatialstreams': {
         'value_type': 'boolean',
         'scale_type': 'linear',
-        'height_factor': .4
+        'height_factor': .63,
+        'translate_label': 85
     }
 }
 
@@ -129,7 +137,8 @@ for (var i in selectableMetrics) {
         field_settings[selectableMetrics[i]] = {
             'value_type': 'number',
             'scale_type': 'linear',
-            'height_factor': 1
+            'height_factor': 1,
+            'translate_label': 60
         }
     }
 }
@@ -150,9 +159,9 @@ var state = {
 }
 
 var reticle = {}; // dict[field; crosshair]
-var histogramPacketNum = [] // array to be used to create overview histogram
 var number_of_packets;
 
+// data structures
 var dataset; // all packets, sorted by pcap_secs
 var stream2packetsDict = {}; // look up values and direction by streamId
 var stream2packetsArray = []; // array of stream ids
@@ -164,9 +173,14 @@ var addresses = {
             "name": "null"
         }
     } // look up dictionary for alias name and direction by mac address
+var histogramPacketNum = [] // array to be used to create overview histogram
 
+// zoom variables
 var zoom_duration = 750; // how long does transition on zoom take
 var zoom_stack = []; // keep track of past zoom domain (pcap secs)
+
+// other settings
+var boolean_area = false // show boolean area charts
 
 // x (pcap) axis for all charts
 var pcapSecsAxis = d3.svg.axis()
@@ -404,6 +418,8 @@ function draw() {
     })
 
     add_legend();
+
+    add_tooltip();
 }
 
 // overview chart at top: show packet distribution over time, and use for panning/zooming
@@ -418,7 +434,7 @@ function add_overview() {
     })
     state.scales["packetNumPerTenth"] = d3.scale.linear().domain([0, max]).range([dimensions.height.overview, 0])
 
-    // set up axis
+    // set up x and y axis
     var overviewYaxis = d3.svg.axis()
         .scale(state.scales['packetNumPerTenth'])
         .orient('right')
@@ -441,7 +457,7 @@ function add_overview() {
         .append("g")
         .attr("transform", "translate(" + dimensions.page.left + ",0)");
 
-    // append x-axis
+    // append x and y axis
     overviewChart.append('g')
         .attr('class', 'axis x overview')
         .attr('transform', 'translate(0,' + dimensions.height.overview + ')')
@@ -483,25 +499,44 @@ function add_overview() {
 }
 
 function add_butter_bar() {
-    var butter_bar_height = 30;
+
     var svg = d3
         .select('body')
         .append('svg')
         .attr('id', 'butter_bar')
         .attr('width', dimensions.width.chart)
-        .attr('height', butter_bar_height);
+        .attr('height', dimensions.height.butter_bar);
+
     svg.append('rect')
         .attr('id', 'butter_bar_box')
         .attr('width', dimensions.width.chart)
-        .attr('height', butter_bar_height)
+        .attr('height', dimensions.height.butter_bar)
         .style('fill', 'none');
+
     svg.append('text')
         .attr('id', 'butter_bar_msg')
         .attr('class', 'legend')
         .attr('x', dimensions.width.chart / 2)
-        .attr('y', butter_bar_height / 2 + 5)
+        .attr('y', dimensions.height.butter_bar / 2 + 5)
         .style('fill', 'black')
         .style('font-size', 14);
+}
+
+function butter_bar(text) {
+    d3.select('text#butter_bar_msg')
+        .style('opacity', 1)
+        .text(text);
+    d3.select('rect#butter_bar_box')
+        .style('opacity', 1)
+        .style('fill', 'red');
+    d3.select('text#butter_bar_msg')
+        .transition()
+        .duration(2000)
+        .style('opacity', 0);
+    d3.select('rect#butter_bar_box')
+        .transition()
+        .duration(1000)
+        .style('opacity', 0);
 }
 
 function add_legend() {
@@ -523,6 +558,7 @@ function add_legend() {
         .enter()
         .append('text')
         .attr('class', function(d) {
+            // for highlighting
             return 'legend stream_' + d +
                 ' ta_' + d.split("---")[0] +
                 ' ra_' + d.split("---")[1] +
@@ -533,12 +569,12 @@ function add_legend() {
         })
         .attr('y', function(d, i) {
             return (Math.floor(i / n_cols) + .5) * legend_line_height
-
         })
         .text(function(d) {
             return to_visible_stream_key(d)
         })
         .on('click', function(d) {
+            // get data needed to highight primary/secondary streams from stream name and addresses dictionary
             var direction = "downstream";
             var ta = d.split("---")[0];
             var ra = d.split("---")[1];
@@ -554,39 +590,41 @@ function add_legend() {
         });
 }
 
-function butter_bar(text) {
-    d3.select('text#butter_bar_msg')
-        .style('opacity', 1)
-        .text(text);
-    d3.select('rect#butter_bar_box')
-        .style('opacity', 1)
-        .style('fill', 'red');
-    d3.select('text#butter_bar_msg')
-        .transition()
-        .duration(2000)
-        .style('opacity', 0);
-    d3.select('rect#butter_bar_box')
-        .transition()
-        .duration(700)
-        .style('opacity', 0);
+function add_tooltip() {
+    d3.select('#tooltip')
+        .style('top', dimensions.page.top + 'px')
+        .classed('hidden', true)
+        .append("svg")
+        .attr("width", dimensions.width.sidebar - 10)
+        .attr("height", availableMetrics.length * dimensions.height.tooltip)
+        .selectAll('.tooltipValues')
+        .data(availableMetrics)
+        .enter()
+        .append("text")
+        .attr("class", "tooltipValues")
+        .attr("y", function(k, i) {
+            return i * dimensions.height.tooltip + 10
+        });
 }
 
-d3.select('#tooltip')
-    .style('top', dimensions.page.top + 'px')
-    .classed('hidden', true)
-    .append("svg")
-    .attr("width", dimensions.width.sidebar - 10)
-    .attr("height", availableMetrics.length * dimensions.height.tooltip)
-    .selectAll('.tooltipValues')
-    .data(availableMetrics)
-    .enter()
-    .append("text")
-    .attr("class", "tooltipValues")
-    .attr("y", function(k, i) {
-        return i * dimensions.height.tooltip + 10
-    });
+function update_show_Tooltip(data) {
+    d3.select('#tooltip')
+        .classed('hidden', false)
+        .selectAll(".tooltipValues")
+        .data(availableMetrics)
+        .text(function(k) {
+            if (k == "streamId") {
+                return k + ": " + to_visible_stream_key(data[k]);
+            }
+            if (k == "ta" || k == "ra") {
+                return k + ": " + addresses[data[k]].name
+            }
+            return k + ": " + data[k]
+        });
+}
 
 function visualize(field) {
+
     // set up main svg for plot
     var mainChart = d3.select('body')
         .append('svg')
@@ -596,6 +634,7 @@ function visualize(field) {
         .append("g")
         .attr("transform", "translate(" + dimensions.page.left + "," + dimensions.height.above_charts + ")");;
 
+    // call function based on value type
     if (field_settings[field].value_type == 'number') {
         visualize_numbers(field, mainChart)
     } else if (field_settings[field].value_type == 'boolean') {
@@ -606,17 +645,20 @@ function visualize(field) {
 
 }
 
-// helper functions for draw
+// HELPER FUNCTIONS FOR VISUALIZATION
+
+// Boolean
 function boolean_percent_of_total_area_setup(data, currentField, xFunc) {
+
     // percent 1 vs 0
     var runningSeq = [];
     var runningCount = 0;
     var rollingAverageLength = 20
+    var y0 = dimensions.height.per_chart * dimensions.height.split_factor;
+
     var k = d3.svg.area()
         .x(xFunc)
-        .y0(function(d) {
-            return dimensions.height.per_chart * dimensions.height.split_factor
-        })
+        .y0(y0)
         .y1(function(d) {
             if (runningSeq.length > rollingAverageLength) {
                 runningCount = runningCount - runningSeq.shift();
@@ -632,24 +674,31 @@ function boolean_percent_of_total_area_setup(data, currentField, xFunc) {
 }
 
 function visualize_boolean(field, svg) {
-    setup_crosshairs(field, svg)
 
+    // reset height if including boolean area charts
+    if (boolean_area) {
+        field_settings[field].height_factor = 1;
+        d3.selectAll(".plot_" + field).attr("height", field_settings[field].height_factor * dimensions.height.per_chart + dimensions.height.x_axis + dimensions.height.above_charts + dimensions.height.below_charts)
+    }
+
+    // set up vertical boxes 
     var boolean_boxes = svg.append('g').attr("class", 'boolean_boxes_' + field).attr("fill", "grey")
 
-    // rectangle view 
     enter_boolean_boxes_by_dataset(field,
         boolean_boxes.selectAll('.bool_boxes_rect_' + field)
         .data(dataset, function(d) {
             return d.pcap_secs
         }));
 
-    // uncomment this to show area chart
-    //draw_boolean_percent_chart(field, svg);
+    if (boolean_area) {
+        draw_boolean_percent_chart(field, svg);
+    }
 
-    // x and y axis
+    // x axis
     draw_metric_x_axis(svg, field);
 
     // Add crosshairs
+    setup_crosshairs(field, svg)
     draw_vertical(reticle[field], field);
 
     // rect for zooming
@@ -955,9 +1004,8 @@ function draw_metric_y_axis(svg, fieldName) {
 function draw_metric_x_axis(svg, fieldName) {
     // title for plot
     svg.append("text")
-        .attr('transform', 'translate(' + dimensions.width.chart / 2 + ',' + (field_settings[fieldName].height_factor * dimensions.height.per_chart + dimensions.height.x_axis + dimensions.height.below_charts / 3) + ')')
+        .attr('transform', 'translate(-10,' + field_settings[fieldName].translate_label + ') rotate(-90)')
         .attr("class", "text-label")
-        .attr("text-anchor", "middle")
         .text(fieldName);
 
     // x axis
@@ -1329,22 +1377,6 @@ function update_crosshairs(d) {
     }
 
     update_show_Tooltip(detailedInfo);
-}
-
-function update_show_Tooltip(data) {
-    d3.select('#tooltip')
-        .classed('hidden', false)
-        .selectAll(".tooltipValues")
-        .data(availableMetrics)
-        .text(function(k) {
-            if (k == "streamId") {
-                return k + ": " + to_visible_stream_key(data[k]);
-            }
-            if (k == "ta" || k == "ra") {
-                return k + ": " + addresses[data[k]].name
-            }
-            return k + ": " + data[k]
-        });
 }
 
 function highlight_stream(d) {

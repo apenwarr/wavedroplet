@@ -49,8 +49,10 @@
 
     .text-label {
       font-family: sans-serif;
-      font-size: 18px;
+      font-size: 14px;
+      fill: grey;
     }
+
 
     .focus {
       opacity: 1;
