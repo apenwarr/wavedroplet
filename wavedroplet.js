@@ -209,19 +209,17 @@ function init(json) {
     // get list of desired plots
     state.to_plot = get_query_param('to_plot');
 
+    // sort by x values
     dataset.sort(function(x, y) {
         return x['pcap_secs'] - y['pcap_secs'];
     });
 
-    // TODO(katepek): Recalculate and redraw when resized
+    // Question: is there a height/width ratio that we actually want?
     dimensions.height.per_chart = Math.max((total_height - dimensions.height.overview - dimensions.page.top - (state.to_plot.length + 1) * (dimensions.height.above_charts + dimensions.height.below_charts + dimensions.height.x_axis)) / state.to_plot.length, 100);
     dimensions.width.chart = total_width - dimensions.page.left - dimensions.width.y_axis - dimensions.width.sidebar;
 
     var x_range = [0, dimensions.width.chart];
     var y_range = [dimensions.height.per_chart, 0];
-
-    log('total_height = ' + total_height);
-    log('height = ' + dimensions.height.per_chart);
 
     add_scale('pcap_secs', x_range);
     state.to_plot.forEach(function(d) {
@@ -302,7 +300,7 @@ function init(json) {
         } else if (addresses[k[1]].type == 'access' || addresses[k[0]].type == 'station') {
             stream2packetsDict[stream].direction = 'upstream';
         } else {
-            console.log(stream, 'direction not found')
+            log(stream, 'direction not found')
         }
     })
 
@@ -594,8 +592,6 @@ d3.select('#tooltip')
     });
 
 function visualize(field) {
-    log('About to visualize ' + field);
-
     // set up main svg for plot
     var mainChart = d3.select('body')
         .append('svg')
