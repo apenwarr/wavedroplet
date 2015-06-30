@@ -101,7 +101,7 @@ var field_settings = {
     'retry-bad': {
         'value_type': 'retrybad',
         'scale_type': 'linear',
-        'height_factor': .6,
+        'height_factor': .54,
         'translate_label': 60
     },
     'retry': {
@@ -126,8 +126,8 @@ var field_settings = {
     'spatialstreams': {
         'value_type': 'boolean',
         'scale_type': 'linear',
-        'height_factor': .63,
-        'translate_label': 85
+        'height_factor': .5,
+        'translate_label': 84
     }
 }
 
@@ -444,7 +444,7 @@ function add_overview() {
         .scale(state.scales['pcap_secs_fixed'])
         .tickFormat(hourMinuteMilliseconds)
         .orient('bottom')
-    .ticks(5);
+        .ticks(5);
 
     // start building the chart
     var overviewChart = d3
@@ -647,32 +647,6 @@ function visualize(field) {
 
 // HELPER FUNCTIONS FOR VISUALIZATION
 
-// Boolean
-function boolean_percent_of_total_area_setup(data, currentField, xFunc) {
-
-    // percent 1 vs 0
-    var runningSeq = [];
-    var runningCount = 0;
-    var rollingAverageLength = 20
-    var y0 = dimensions.height.per_chart * dimensions.height.split_factor;
-
-    var k = d3.svg.area()
-        .x(xFunc)
-        .y0(y0)
-        .y1(function(d) {
-            if (runningSeq.length > rollingAverageLength) {
-                runningCount = runningCount - runningSeq.shift();
-            }
-            runningSeq.push(d[currentField]);
-            runningCount = runningCount + d[currentField];
-            return dimensions.height.per_chart * (1 - dimensions.height.split_factor) *
-                (runningCount / rollingAverageLength) + dimensions.height.per_chart * dimensions.height.split_factor;
-        })
-        .interpolate("basis");
-
-    return k(data)
-}
-
 function visualize_boolean(field, svg) {
 
     // reset height if including boolean area charts
@@ -706,15 +680,12 @@ function visualize_boolean(field, svg) {
 }
 
 function setup_crosshairs(field, svg) {
-    // set up crosshairs element
     reticle[field] = svg.append('g')
         .attr("class", "focus")
         .style('display', null);
 }
 
 function visualize_retrybad(svg) {
-    setup_crosshairs('retry-bad', svg)
-
     var boolean_boxes = svg.append('g').attr("class", 'boolean_boxes_retry-bad').attr("fill", "grey")
 
     // box charts
@@ -724,26 +695,20 @@ function visualize_retrybad(svg) {
             return d.pcap_secs
         }));
 
-    // To include dripping percent chart, uncomment the line below
-    // draw_retrybad_percent_chart(svg);
+    // To include dripping percent chart, uncomment the line below - also, fix spacing
+    //draw_retrybad_percent_chart(svg);
 
     // x axis
     draw_metric_x_axis(svg, 'retry-bad');
 
-
     // Add crosshairs
+    setup_crosshairs('retry-bad', svg)
     draw_vertical(reticle['retry-bad'], 'retry-bad');
 
     // zooming object
     draw_rect_for_zooming(svg, dimensions.height.per_chart * field_settings['retry-bad'].height_factor)
 }
 
-function draw_boolean_percent_chart(field, svg) {
-
-    svg.append("path")
-        .attr("class", "percent_area_chart_boolean_" + field)
-        .attr("d", boolean_percent_of_total_area_setup(dataset, field, scaled('pcap_secs')));
-}
 
 // function to transform stack data into area charts
 var retrybad_percent_area = d3.svg.area()
@@ -758,80 +723,6 @@ var retrybad_percent_area = d3.svg.area()
         return dimensions.height.per_chart * (1 - dimensions.height.split_factor) * (d.y + d.y0) +
             dimensions.height.per_chart * dimensions.height.split_factor;
     });
-
-function draw_retrybad_percent_chart(svg) {
-    // set up data for rolling average
-    var runningSeq = {
-        "retry": [],
-        "bad": [],
-        "both": []
-    };
-    var runningCount = {
-        "retry": 0,
-        "bad": 0,
-        "both": 0
-    };
-    var rollingAverageLength = 16
-
-    // keep track of seconds, for centering the window
-    var secondsCounter = []
-
-    var types = ["bad", "retry"]
-
-    // calculate the moving averages
-    var movingAveData = types.map(function(type) {
-        return dataset.map(function(d) {
-            var value = d[type];
-
-            if (type == "retry" & d.bad == 1) {
-                // this means that if bad and retry are both 1, then we only count it for bad
-                value = 0;
-            }
-
-            secondsCounter.push(d.pcap_secs)
-
-            // keep running count and sequence
-            if (runningSeq[type].length >= rollingAverageLength) {
-                // drop the old value
-                runningCount[type] = runningCount[type] - runningSeq[type].shift();
-            }
-            runningSeq[type].push(value);
-
-            // add the new value
-            runningCount[type] = runningCount[type] + value;
-
-            // center the results
-            if (secondsCounter.length > rollingAverageLength / 2) {
-                return {
-                    x: secondsCounter.shift(),
-                    y: runningCount[type] / rollingAverageLength
-                };
-            } else {
-                return {
-                    x: d.pcap_secs,
-                    y: 0
-                }
-            }
-
-        });
-    });
-
-    // use D3 stack layout to set up the stack from the raw data
-    var stack = d3.layout.stack()(movingAveData)
-
-    // use the stack as the data input and call the area function to access
-    svg.selectAll(".percent_area")
-        .data(stack)
-        .enter()
-        .append("path")
-        .attr("class", function(d, i) {
-            return "percent_area" + " type_" + types[i]
-        })
-        .attr("d", function(d) {
-            return retrybad_percent_area(d);
-        });
-
-}
 
 function enter_boolean_boxes_by_dataset(fieldName, svg) {
 
@@ -1454,3 +1345,117 @@ function hourMinuteMilliseconds(d) {
 function milliseconds(d) {
     return d3.time.format("%Ss %Lms")(new Date(d * 1000))
 }
+
+
+// functions to draw boolean percent charts
+/*
+function draw_boolean_percent_chart(field, svg) {
+
+    svg.append("path")
+        .attr("class", "percent_area_chart_boolean_" + field)
+        .attr("d", boolean_percent_of_total_area_setup(dataset, field, scaled('pcap_secs')));
+}
+*/
+
+/*
+function boolean_percent_of_total_area_setup(data, currentField, xFunc) {
+
+    // percent 1 vs 0
+    var runningSeq = [];
+    var runningCount = 0;
+    var rollingAverageLength = 20
+    var y0 = dimensions.height.per_chart * dimensions.height.split_factor;
+
+    var k = d3.svg.area()
+        .x(xFunc)
+        .y0(y0)
+        .y1(function(d) {
+            if (runningSeq.length > rollingAverageLength) {
+                runningCount = runningCount - runningSeq.shift();
+            }
+            runningSeq.push(d[currentField]);
+            runningCount = runningCount + d[currentField];
+            return dimensions.height.per_chart * (1 - dimensions.height.split_factor) *
+                (runningCount / rollingAverageLength) + dimensions.height.per_chart * dimensions.height.split_factor;
+        })
+        .interpolate("basis");
+
+    return k(data)
+}
+*/
+
+/*
+function draw_retrybad_percent_chart(svg) {
+    // set up data for rolling average
+    var runningSeq = {
+        "retry": [],
+        "bad": [],
+        "both": []
+    };
+    var runningCount = {
+        "retry": 0,
+        "bad": 0,
+        "both": 0
+    };
+    var rollingAverageLength = 16
+
+    // keep track of seconds, for centering the window
+    var secondsCounter = []
+
+    var types = ["bad", "retry"]
+
+    // calculate the moving averages
+    var movingAveData = types.map(function(type) {
+        return dataset.map(function(d) {
+            var value = d[type];
+
+            if (type == "retry" & d.bad == 1) {
+                // this means that if bad and retry are both 1, then we only count it for bad
+                value = 0;
+            }
+
+            secondsCounter.push(d.pcap_secs)
+
+            // keep running count and sequence
+            if (runningSeq[type].length >= rollingAverageLength) {
+                // drop the old value
+                runningCount[type] = runningCount[type] - runningSeq[type].shift();
+            }
+            runningSeq[type].push(value);
+
+            // add the new value
+            runningCount[type] = runningCount[type] + value;
+
+            // center the results
+            if (secondsCounter.length > rollingAverageLength / 2) {
+                return {
+                    x: secondsCounter.shift(),
+                    y: runningCount[type] / rollingAverageLength
+                };
+            } else {
+                return {
+                    x: d.pcap_secs,
+                    y: 0
+                }
+            }
+
+        });
+    });
+
+    // use D3 stack layout to set up the stack from the raw data
+    var stack = d3.layout.stack()(movingAveData)
+
+    // use the stack as the data input and call the area function to access
+    svg.selectAll(".percent_area")
+        .data(stack)
+        .enter()
+        .append("path")
+        .attr("class", function(d, i) {
+            return "percent_area" + " type_" + types[i]
+        })
+        .attr("d", function(d) {
+            return retrybad_percent_area(d);
+        });
+
+}
+*/
