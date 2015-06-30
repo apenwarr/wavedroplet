@@ -313,8 +313,7 @@ def _MaybeCache(blob_info, pcapdata, start_time, end_time):
     memcache.set(key='%s_%d' % (prefix, i), value=gstr, namespace='jsdata')
 
   pairs_dict = [{'ta': t[0], 'ra': t[1]} for t in pairs]
-  jscache = dict(js_streams=pairs_dict,
-                 start_times=start_times)
+  jscache = dict()
   memcache.set(key=prefix, value=jscache, namespace='jsindex')
 
   packets = _ReadCache(start_times, start_time, end_time,
@@ -340,7 +339,6 @@ class JsonHandler(_BaseHandler):
     jscache['filename'] = str(blob_info.filename)
     jscache["aliases"] = pcapdata.aliases
     self.response.out.write(json.dumps(jscache))
-
 
 def Handle500(unused_req, resp, exc):
   resp.clear()

@@ -123,6 +123,7 @@ var field_settings = {
     }
 }
 
+// complete selectable metrics 
 for (var i in selectableMetrics) {
     if (!field_settings[selectableMetrics[i]]) {
         field_settings[selectableMetrics[i]] = {
@@ -133,7 +134,9 @@ for (var i in selectableMetrics) {
     }
 }
 
-// global variables
+// GLOBAL VARIABLES 
+
+// state
 var state = {
     to_plot: [],
     scales: [],
@@ -151,25 +154,22 @@ var histogramPacketNum = [] // array to be used to create overview histogram
 var number_of_packets;
 
 var dataset; // all packets, sorted by pcap_secs
-var stream2packetsDict = {};
-var stream2packetsArray = [];
-var addresses = {}
+var stream2packetsDict = {}; // look up values and direction by streamId
+var stream2packetsArray = []; // array of stream ids
+var addresses = {} // look up direction and alias name by mac address
 
-var zoom_duration = 750;
+var zoom_duration = 750; // how long does transition on zoom take
+var zoom_stack = []; // keep track of past zoom domain (pcap secs)
 
-// pcap axis
+// x (pcap) axis for all charts
 var pcapSecsAxis = d3.svg.axis()
     .tickFormat(hourMinuteMilliseconds)
     .orient('bottom')
     .ticks(5);
 
-// to manage zooming
-var zoom_stack = [];
-
-// set up brush and brushed function
+// brush object for zooming using top level histogram chart
 var brush = d3.svg.brush()
     .on("brushend", function() {
-
         zoom_stack = [brush.empty() ? state.scales['pcap_secs_fixed'].domain() : brush.extent()];
         update_pcaps_domain(zoom_stack[0], false);
     });
@@ -187,25 +187,24 @@ function scaled(name) {
     }
 }
 
-// get data & visualize
+// get data & visualize [main function!]
 d3.json('/json/' + decodeURIComponent(get_query_param('key')[0]), function(error, json) {
     if (error) return console.error('error', error);
-
-    var begin = new Date().getTime();
 
     // update title
     document.getElementById("title").innerHTML = json.filename;
 
+    // set up 
     init(json);
-    draw();
 
-    var end = new Date().getTime();
-    log('Spent on visualization ' + ((end - begin) / 1000) + ' sec.');
+    // visualize
+    draw();
 })
 
 function init(json) {
     // TODO(katepek): Should sanitize here? E.g., discard bad packets?
     // Packets w/o seq?
+    console.log(json)
     dataset = json.js_packets;
 
     state.to_plot = get_query_param('to_plot');
