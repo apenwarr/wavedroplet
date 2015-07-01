@@ -174,10 +174,15 @@ var addresses = {
         }
     } // look up dictionary for alias name and direction by mac address
 var histogramPacketNum = [] // array to be used to create overview histogram
+var dict_by_ms = {} // faster to find packets on mouseover
 
 // zoom variables
 var zoom_duration = 750; // how long does transition on zoom take
 var zoom_stack = []; // keep track of past zoom domain (pcap secs)
+
+// on chart selection: drag, clicks, etc
+var clicks = 0;
+var event_list = [];
 
 // other settings
 var boolean_area = false // show boolean area charts
@@ -325,6 +330,12 @@ function init(json) {
                 stream2packetsArray.push(streamId);
             } else {
                 stream2packetsDict[streamId].values.push(d);
+            }
+
+            if (!dict_by_ms[Math.floor(d.pcap_secs * 10)]) {
+                dict_by_ms[Math.floor(d.pcap_secs * 10)] = [d]
+            } else {
+                dict_by_ms[Math.floor(d.pcap_secs * 10)].push(d)
             }
         }
     })
@@ -616,6 +627,9 @@ function update_show_Tooltip(data) {
                 return k + ": " + to_visible_stream_key(data[k]);
             }
             if (k == "ta" || k == "ra") {
+                if (typeof(addresses[data[k]]) == undefined) {
+                    console.log(data[k])
+                }
                 return k + ": " + addresses[data[k]].name
             }
             return k + ": " + data[k]
@@ -886,32 +900,38 @@ function draw_metric_x_axis(svg, fieldName) {
         .attr('transform', 'translate(0,' + (field_settings[fieldName].height_factor * dimensions.height.per_chart) + ')')
 
     xaxis.call(pcapSecsAxis);
-    xaxis.append("rect").attr('height', dimensions.height.x_axis).attr('width', dimensions.width.chart).style('opacity', 0);
-
 }
 
 function update_pcaps_domain(newDomain, transition_bool) {
-    // update charts
+
+    // set x-axis scale to new domain
     state.scales['pcap_secs'].domain(newDomain);
+    // update all x-axis with new scale (except overview)
     d3.selectAll(".axis.x.metric").call(pcapSecsAxis);
 
-    // todo: better way of calling this more generally to update x-axis scale?
+    // trim dataset to just relevant time period
     var trimmed_data = trim_by_pcap_secs(dataset);
 
+    // for each chart: select w/ new dataset, then exit/enter/update 
     state.to_plot.forEach(function(fieldName) {
         if (field_settings[fieldName].value_type == 'number') {
+            // select
             var points = d3.selectAll('.pcap_vs_' + fieldName).selectAll('.points')
                 .data(trimmed_data, function(d) {
                     return d.pcap_secs
                 })
 
+            // exit
             points.exit().remove();
 
+            // update
             if (transition_bool) {
                 points.transition().duration(zoom_duration).attr('cx', scaled('pcap_secs'))
             } else {
                 points.attr('cx', scaled('pcap_secs'))
             }
+
+            // enter
             points.enter()
                 .append('circle')
                 .attr('cy', scaled(fieldName))
@@ -928,12 +948,14 @@ function update_pcaps_domain(newDomain, transition_bool) {
                 .attr("d", boolean_percent_of_total_area_setup(trimmed_data, fieldName, scaled('pcap_secs')));
                 */
 
+            // select
             var bool_boxes_current = d3.select(".boolean_boxes_" + fieldName)
                 .selectAll(".bool_boxes_rect_" + fieldName)
                 .data(trimmed_data, function(d) {
                     return d.pcap_secs
                 })
-                // exit 
+
+            // exit 
             bool_boxes_current.exit().remove()
 
             // update
@@ -950,7 +972,7 @@ function update_pcaps_domain(newDomain, transition_bool) {
 
         if (field_settings[fieldName].value_type == 'retrybad') {
 
-            // BOXES
+            // select
             var bool_boxes_current = d3.select(".boolean_boxes_retry-bad")
                 .selectAll(".bool_boxes_rect_retry-bad")
                 .data(trimmed_data, function(d) {
@@ -959,7 +981,6 @@ function update_pcaps_domain(newDomain, transition_bool) {
 
             // exit 
             bool_boxes_current.exit().remove()
-
 
             // update
             if (transition_bool) {
@@ -979,18 +1000,15 @@ function update_pcaps_domain(newDomain, transition_bool) {
                 })
 */
         }
-
-
     })
 }
 
-// helper functions for update
+// UPDATE HELPER FUNCTIONS
 function trim_by_pcap_secs(data) {
     // slice dataset based on desired min/max pcap milliseconds
     var domain = state.scales['pcap_secs'].domain();
     return data.slice(binary_search_by_pcap_secs(data, domain[0]), binary_search_by_pcap_secs(data, domain[1]));
 }
-
 
 function zoomOut() {
     // get last element from the zoom stack
@@ -1000,6 +1018,7 @@ function zoomOut() {
     } else {
         state.scales['pcap_secs'].domain(state.scales['pcap_secs_fixed'].domain())
     }
+
     // update brush domain and visible extent
     brush.extent(state.scales['pcap_secs'].domain())
     d3.selectAll(".brush").call(brush)
@@ -1007,21 +1026,20 @@ function zoomOut() {
     update_pcaps_domain(state.scales['pcap_secs'].domain(), true)
 }
 
-var clicks = 0;
-var event_list = [];
-
 // helper functions for selection
 function draw_hidden_rect_for_mouseover(svg, fieldName) {
 
-    var click_timeout;
-    var dragging = false;
-    var mouse_start_pos;
+    var click_timeout; // to call/cancel timeout for clicks vs double clicks
+    var dragging = false; // during drag or not
+    var mouse_start_pos; // for each drag, where did the mouse start
 
+    // keeping track of change in x over drag from starting point
     var drag_metrics = {
         x_start: [],
         x_diff: 0
     };
 
+    // add rectangle to monitor mouse events
     svg.append('rect')
         .attr('width', dimensions.width.chart)
         .attr('height', dimensions.height.per_chart)
@@ -1029,10 +1047,13 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
         .style('fill', 'none')
         .style('pointer-events', 'all')
         .on('mouseover', function() {
+            // show crosshairs
             d3.selectAll(".focus").classed("hidden", false)
         })
         .on('mouseout', function() {
             var x = d3.mouse(this)[0];
+
+            // when too far left/right, hide crosshairs and tooltip
             if (x < state.scales['pcap_secs'].range()[0] ||
                 x > state.scales['pcap_secs'].range()[1]) {
                 d3.select('#tooltip').classed("hidden", true)
@@ -1040,13 +1061,18 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
             }
         })
         .on('mousedown', function() {
+            // keep track of events
             event_list.push('mousedown')
+
+            // track start position, in case of drag
             mouse_start_pos = d3.mouse(this)[0]
+
             d3.event.preventDefault()
         })
         .on('mouseup', function() {
             event_list.push('mouseup')
-                // end of drag
+
+            // end of drag
             if (dragging == true) {
                 d3.selectAll(".drag_rect").transition().duration(zoom_duration).attr("x", 0).attr("width", dimensions.width.chart)
                 zoom_stack[zoom_stack.length] = state.scales['pcap_secs'].domain();
@@ -1064,18 +1090,24 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
                     ];
                 }
 
+                // use new domain to update scales, brush
                 state.scales['pcap_secs'].domain(newDomain)
                 brush.extent(newDomain)
                 d3.selectAll(".brush").call(brush)
 
                 update_pcaps_domain(newDomain, true)
+
+                // clear during drag metrics
                 drag_metrics = {
                     x_start: [],
                     x_diff: 0
                 }
 
+                // remove drag rectangle from view
                 d3.selectAll(".drag_rect").transition().delay(500).attr("opacity", 0).attr("x", 0).attr("width", 0);
                 var timeout2 = window.setTimeout(hide_element, 500, '.drag_rect')
+
+                // reset variables
                 dragging = false;
                 event_list = [];
                 clicks = 0;
@@ -1083,9 +1115,10 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
             } else if (event_list[event_list.length - 2] == 'mousedown') {
                 clicks++
                 if (clicks == 1) {
-                    //click_timeout = window.setTimeout(on_click(d3.mouse(this), fieldName), 5000);
+                    // single click
                     click_timeout = window.setTimeout(on_click, 200, d3.mouse(this), fieldName);
                 } else {
+                    // double click
                     window.clearTimeout(click_timeout);
                     zoomOut()
                     event_list = [];
@@ -1097,6 +1130,8 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
             event_list.push("mousemove")
             if (event_list.indexOf('mousedown') != -1) {
                 if (dragging == true) {
+
+                    // continue drag
                     drag_metrics.x_diff = d3.mouse(this)[0] - mouse_start_pos
                     if (drag_metrics.x_diff > 0) {
                         d3.selectAll(".drag_rect").attr("width", drag_metrics.x_diff).attr("x", mouse_start_pos)
@@ -1104,12 +1139,14 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
                         d3.selectAll(".drag_rect").attr("width", -drag_metrics.x_diff).attr("x", mouse_start_pos + drag_metrics.x_diff)
                     }
                 } else if (event_list[event_list.length - 2] == 'mousemove') {
+
+                    // start drag
                     dragging = true;
                     d3.selectAll(".drag_rect").classed("hidden", false).attr("width", 0).attr("x", mouse_start_pos).attr("opacity", .1)
                 }
             } else {
-
-                d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], fieldName, true);
+                // no drag, hover over nearest packet
+                var d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], fieldName, true);
                 if (!d) return;
                 update_crosshairs(d);
             }
@@ -1157,25 +1194,6 @@ function draw_crosshairs(element) {
         .attr('dy', '-.5em');
 }
 
-function find_packet_boolean(x, y, field, lock) {
-    if (x < state.scales['pcap_secs'].range()[0] ||
-        x > state.scales['pcap_secs'].range()[1] ||
-        y > total_height)
-        return;
-
-    var pcap_secs = state.scales['pcap_secs'].invert(x);
-    var search_in = dataset;
-
-    if (state.selected_data.stream && lock) {
-        search_in = stream2packetsDict[state.selected_data.stream].values;
-    }
-
-    var idx = binary_search_by_pcap_secs(search_in, pcap_secs, 0);
-    // d = closest_to_y(search_in, idx, x, y, scaled(field), field);
-
-    // return d;
-}
-
 function find_packet(x, y, field, lock) {
     if (x < state.scales['pcap_secs'].range()[0] ||
         x > state.scales['pcap_secs'].range()[1] ||
@@ -1183,7 +1201,9 @@ function find_packet(x, y, field, lock) {
         return;
 
     var pcap_secs = state.scales['pcap_secs'].invert(x);
-    var search_in = dataset;
+
+    // search in closest 100ms of data points
+    var search_in = dict_by_ms[Math.floor(pcap_secs * 10)];
 
     if (state.selected_data.stream && lock) {
         search_in = stream2packetsDict[state.selected_data.stream].values;
@@ -1191,12 +1211,11 @@ function find_packet(x, y, field, lock) {
 
     var idx = binary_search_by_pcap_secs(search_in, pcap_secs, 0);
     d = closest_to_y(search_in, idx, x, y, scaled(field), field);
-
     return d;
 }
 
 function closest_to_y(search_in, idx, x, y, scaled_y, field) {
-    var idx_range = 50;
+    var idx_range = 30;
     var x_range = 10;
     var scaled_x = scaled('pcap_secs');
 
@@ -1240,7 +1259,6 @@ function update_crosshairs(d) {
 
         reticle[r_field].select('.x')
             .attr('transform', 'translate(' + closest_x + 10 + ',0)');
-
 
         reticle[r_field].select('circle.y')
             .attr('transform',
@@ -1454,4 +1472,25 @@ var retrybad_percent_area = d3.svg.area()
             dimensions.height.per_chart * dimensions.height.split_factor;
     });
 
+*/
+
+
+/*
+
+function find_packet_boolean(x, y, field, lock) {
+    if (x < state.scales['pcap_secs'].range()[0] ||
+        x > state.scales['pcap_secs'].range()[1] ||
+        y > total_height)
+        return;
+
+    var pcap_secs = state.scales['pcap_secs'].invert(x);
+    var search_in = dict_by_ms[Math.floor(pcap_secs * 10)];
+
+    if (state.selected_data.stream && lock) {
+        search_in = stream2packetsDict[state.selected_data.stream].values;
+    }
+
+    var idx = binary_search_by_pcap_secs(search_in, pcap_secs, 0);
+    return dict_by_ms[Math.floor(pcap_secs * 10)][idx];
+}
 */
