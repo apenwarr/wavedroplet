@@ -21,7 +21,7 @@ var total_height = w.innerHeight || e.clientHeight || g.clientHeight;
 // set chart dimensions
 var dimensions = {
     page: {
-        left: 50,
+        left: 80,
         top: 30
     },
     height: {
@@ -144,6 +144,8 @@ for (var i in selectableMetrics) {
 }
 
 // GLOBAL VARIABLES 
+
+// TODO: better handling of variables, less reliance on global variables
 
 // state
 var state = {
@@ -301,6 +303,13 @@ function init(json) {
             // use dsmode from each packet to define addresses as access or stations, use later to define streams as downstream/upstream
             // Logic: if dsmode = 2, then assign as downstream. If dsmode == 1, then assign as upstream. If dsmode 
             // question: better to check if type exists, or overwrite as I'm doing here?
+
+            if (!addresses[d.ra]) {
+                addresses[d.ra] = {
+                    "name": d.ra
+                }
+            }
+
             if (d.dsmode == 2) {
                 addresses[d.ta].type = "access";
                 addresses[d.ra].type = "station"
@@ -890,7 +899,7 @@ function draw_metric_y_axis(svg, fieldName) {
 function draw_metric_x_axis(svg, fieldName) {
     // title for plot
     svg.append("text")
-        .attr('transform', 'translate(-25,' + field_settings[fieldName].translate_label + ') rotate(-90)')
+        .attr('transform', 'translate(-40,' + field_settings[fieldName].translate_label + ') rotate(-90)')
         .attr("class", "text-label")
         .text(fieldName);
 
@@ -1107,6 +1116,8 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
                 }
             } else {
                 // no drag, hover over nearest packet
+
+                // TODO: debounce here
                 var d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], fieldName, true);
                 if (!d) return;
                 update_crosshairs(d);
