@@ -1026,7 +1026,7 @@ function zoomOut() {
     update_pcaps_domain(state.scales['pcap_secs'].domain(), true)
 }
 
-// helper functions for selection
+// helper functions for selection - currently only implemented on point charts
 function draw_hidden_rect_for_mouseover(svg, fieldName) {
 
     var click_timeout; // to call/cancel timeout for clicks vs double clicks
@@ -1034,10 +1034,7 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
     var mouse_start_pos; // for each drag, where did the mouse start
 
     // keeping track of change in x over drag from starting point
-    var drag_metrics = {
-        x_start: [],
-        x_diff: 0
-    };
+    var x_diff = 0;
 
     // add rectangle to monitor mouse events
     svg.append('rect')
@@ -1051,14 +1048,7 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
             d3.selectAll(".focus").classed("hidden", false)
         })
         .on('mouseout', function() {
-            var x = d3.mouse(this)[0];
-
-            // when too far left/right, hide crosshairs and tooltip
-            if (x < state.scales['pcap_secs'].range()[0] ||
-                x > state.scales['pcap_secs'].range()[1]) {
-                d3.select('#tooltip').classed("hidden", true)
-                d3.selectAll(".focus").classed("hidden", true)
-            }
+            hide_if_out_of_range(d3.mouse(this)[0])
         })
         .on('mousedown', function() {
             // keep track of events
@@ -1074,40 +1064,10 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
 
             // end of drag
             if (dragging == true) {
-                d3.selectAll(".drag_rect").transition().duration(zoom_duration).attr("x", 0).attr("width", dimensions.width.chart)
-                zoom_stack[zoom_stack.length] = state.scales['pcap_secs'].domain();
-
-                // define new domain, and update
-                if (drag_metrics.x_diff > 0) {
-                    var newDomain = [
-                        state.scales['pcap_secs'].invert(mouse_start_pos),
-                        state.scales['pcap_secs'].invert(d3.mouse(this)[0])
-                    ];
-                } else {
-                    var newDomain = [
-                        state.scales['pcap_secs'].invert(d3.mouse(this)[0]),
-                        state.scales['pcap_secs'].invert(mouse_start_pos)
-                    ];
-                }
-
-                // use new domain to update scales, brush
-                state.scales['pcap_secs'].domain(newDomain)
-                brush.extent(newDomain)
-                d3.selectAll(".brush").call(brush)
-
-                update_pcaps_domain(newDomain, true)
+                end_drag(x_diff > 0, mouse_start_pos, d3.mouse(this)[0]);
 
                 // clear during drag metrics
-                drag_metrics = {
-                    x_start: [],
-                    x_diff: 0
-                }
-
-                // remove drag rectangle from view
-                d3.selectAll(".drag_rect").transition().delay(500).attr("opacity", 0).attr("x", 0).attr("width", 0);
-                var timeout2 = window.setTimeout(hide_element, 500, '.drag_rect')
-
-                // reset variables
+                x_diff = 0
                 dragging = false;
                 event_list = [];
                 clicks = 0;
@@ -1115,12 +1075,13 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
             } else if (event_list[event_list.length - 2] == 'mousedown') {
                 clicks++
                 if (clicks == 1) {
-                    // single click
-                    click_timeout = window.setTimeout(on_click, 200, d3.mouse(this), fieldName);
+                    click_timeout = window.setTimeout(on_click, 200, d3.mouse(this), fieldName); // plan for single click
                 } else {
-                    // double click
-                    window.clearTimeout(click_timeout);
+                    // if double click
+                    window.clearTimeout(click_timeout); // cancel single click
                     zoomOut()
+
+                    // reset
                     event_list = [];
                     clicks = 0;
                 }
@@ -1132,11 +1093,11 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
                 if (dragging == true) {
 
                     // continue drag
-                    drag_metrics.x_diff = d3.mouse(this)[0] - mouse_start_pos
-                    if (drag_metrics.x_diff > 0) {
-                        d3.selectAll(".drag_rect").attr("width", drag_metrics.x_diff).attr("x", mouse_start_pos)
+                    x_diff = d3.mouse(this)[0] - mouse_start_pos
+                    if (x_diff > 0) {
+                        d3.selectAll(".drag_rect").attr("width", x_diff).attr("x", mouse_start_pos)
                     } else {
-                        d3.selectAll(".drag_rect").attr("width", -drag_metrics.x_diff).attr("x", mouse_start_pos + drag_metrics.x_diff)
+                        d3.selectAll(".drag_rect").attr("width", -x_diff).attr("x", mouse_start_pos + x_diff)
                     }
                 } else if (event_list[event_list.length - 2] == 'mousemove') {
 
@@ -1151,6 +1112,43 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
                 update_crosshairs(d);
             }
         })
+}
+
+function end_drag(positive_diff, mouse_start, mouse_x) {
+    d3.selectAll(".drag_rect").transition().duration(zoom_duration).attr("x", 0).attr("width", dimensions.width.chart)
+    zoom_stack[zoom_stack.length] = state.scales['pcap_secs'].domain();
+
+    // define new domain, and update
+    if (positive_diff) {
+        var newDomain = [
+            state.scales['pcap_secs'].invert(mouse_start),
+            state.scales['pcap_secs'].invert(mouse_x)
+        ];
+    } else {
+        var newDomain = [
+            state.scales['pcap_secs'].invert(mouse_x),
+            state.scales['pcap_secs'].invert(mouse_start)
+        ];
+    }
+
+    // use new domain to update 
+    state.scales['pcap_secs'].domain(newDomain)
+    brush.extent(newDomain)
+    d3.selectAll(".brush").call(brush)
+
+    update_pcaps_domain(newDomain, true)
+
+    // remove drag rectangle from view
+    d3.selectAll(".drag_rect").transition().delay(500).attr("opacity", 0).attr("x", 0).attr("width", 0);
+    var timeout2 = window.setTimeout(hide_element, 500, '.drag_rect')
+}
+
+function hide_if_out_of_range(x) {
+    if (x < state.scales['pcap_secs'].range()[0] ||
+        x > state.scales['pcap_secs'].range()[1]) {
+        d3.select('#tooltip').classed("hidden", true)
+        d3.selectAll(".focus").classed("hidden", true)
+    }
 }
 
 function hide_element(element) {
@@ -1274,15 +1272,18 @@ function update_crosshairs(d) {
 }
 
 function highlight_stream(d) {
+    // todo: can this be done more efficiently?
     d3.selectAll(".legend").classed("selected_downstream", false).classed("selected_upstream", false)
 
-    // to do - limit these?
+    // remove current selections
     d3.selectAll(".selected_downstream").classed("selected_downstream", false).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_unselected)
     d3.selectAll(".selected_upstream").classed("selected_upstream", false).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_unselected)
     d3.selectAll(".selected_partialMatch_downstream").classed("selected_partialMatch_downstream", false).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_unselected)
     d3.selectAll(".selected_partialMatch_upstream").classed("selected_partialMatch_upstream", false).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_unselected)
 
     if (d.streamId != "badpacket---badpacket") {
+
+        // remove bad selections
         d3.selectAll(".selected_bad").classed("selected_bad", false);
         d3.selectAll(".stream_badpacket---badpacket").filter('.legend').classed("selected_bad", false);
 
@@ -1300,6 +1301,7 @@ function highlight_stream(d) {
             d3.selectAll(".ra_" + d.ra).classed("selected_partialMatch_downstream", true).attr("height", dimensions.height.per_chart * dimensions.height.bar_factor_selected)
         }
     } else {
+        // make "bad" selections
         d3.selectAll(".badpacket").classed("selected_bad", true);
         d3.selectAll(".stream_badpacket---badpacket").filter('.legend').classed("selected_bad", true);
     }
@@ -1307,6 +1309,7 @@ function highlight_stream(d) {
 }
 
 function select_stream(d) {
+
     // if new stream selected, update view & selected stream
     if (!state.selected_data.stream || d.streamId != state.selected_data.stream) {
 
@@ -1324,6 +1327,7 @@ function select_stream(d) {
         highlight_stream(d);
         butter_bar('Locked to: ' + to_visible_stream_key(d.streamId));
     } else {
+        // unselect everything!
         d3.selectAll(".selected_downstream").classed("selected_downstream", false);
         d3.selectAll(".selected_upstream").classed("selected_upstream", false);
         d3.selectAll(".selected_partialMatch_downstream").classed("selected_partialMatch_downstream", false);
