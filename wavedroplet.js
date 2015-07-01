@@ -128,6 +128,18 @@ var field_settings = {
         'scale_type': 'linear',
         'height_factor': .5,
         'translate_label': 84
+    },
+    'streamId': {
+        'value_type': 'string',
+        'scale_type': 'linear',
+        'height_factor': 1,
+        'translate_label': 60
+    },
+    'typestr': {
+        'value_type': 'string',
+        'scale_type': 'linear',
+        'height_factor': 1,
+        'translate_label': 60
     }
 }
 

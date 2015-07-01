@@ -33,7 +33,7 @@ from google.appengine.ext.webapp import blobstore_handlers
 BROADCAST = 'ff:ff:ff:ff:ff:ff'
 DEFAULT_FIELDS = ['seq', 'rate']
 AVAIL_FIELDS = ['seq', 'mcs', 'spatialstreams', 'bw', 'rate', 'retry', 'bad', 'retry-bad',
-                'type', 'typestr', 'dsmode', 'dbm_antsignal', 'dbm_antnoise']
+                'type', 'typestr', 'dsmode', 'dbm_antsignal', 'dbm_antnoise', 'streamId']
 ALL_FIELDS = ['pcap_secs', 'mac_usecs', 'ta', 'ra', 'antenna',
               'duration', 'orig_len', 'powerman'] + AVAIL_FIELDS
 
