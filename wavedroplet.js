@@ -746,12 +746,6 @@ function visualize(field) {
 
 function visualize_boolean(field, svg) {
 
-    // reset height if including boolean area charts
-    if (boolean_area) {
-        field_settings[field].height_factor = 1;
-        d3.selectAll(".plot_" + field).attr("height", field_settings[field].chart_height + dimensions.height.x_axis + dimensions.height.above_charts + dimensions.height.below_charts)
-    }
-
     // set up vertical boxes 
     var boolean_boxes = svg.append('g').attr("class", 'boolean_boxes_' + field).attr("fill", "grey")
 
@@ -760,10 +754,6 @@ function visualize_boolean(field, svg) {
         .data(dataset, function(d) {
             return d.pcap_secs
         }));
-
-    if (boolean_area) {
-        draw_boolean_percent_chart(field, svg);
-    }
 
     // x axis
     draw_metric_x_axis(svg, field);
@@ -945,9 +935,11 @@ function determine_selected_class(d) {
 
 function visualize_typestr(svg) {
 
-    var height = ordered_arrays['typestr'].length * 22;
-    d3.selectAll(".plot_" + "typestr").attr("height", height)
-    field_settings.typestr.height_factor = height / dimensions.height.per_chart
+    field_settings.typestr.chart_height = (ordered_arrays['typestr'].length + 1) * 18;
+    d3.selectAll(".plot_" + "typestr").attr("height", field_settings.typestr.chart_height +
+        dimensions.height.x_axis +
+        dimensions.height.above_charts +
+        dimensions.height.below_charts);
 
     // set up vertical boxes 
     var boxes = svg.append('g').attr("class", 'typestr_boxes_' + 'typestr').attr("fill", "grey")
@@ -968,7 +960,7 @@ function visualize_typestr(svg) {
     draw_vertical(reticle['typestr'], 'typestr');
 
     // append the rectangle to capture mouse movements
-    draw_rect_for_zooming(svg, height)
+    draw_rect_for_zooming(svg, field_settings.typestr.chart_height)
     draw_hidden_rect_for_mouseover(svg, 'typestr')
 
 }
@@ -1345,7 +1337,7 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
                 }
             } else {
                 // no drag, hover over nearest packet
-                if (fieldName == 'typestr') {
+                if (fieldName == 'typestr' || fieldName == 'streamId') {
                     var d = find_packet_string(d3.mouse(this)[0], d3.mouse(this)[1], fieldName, true);
                 } else {
                     var d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], fieldName, true);
@@ -1452,12 +1444,20 @@ function find_packet_string(x, y, field, lock) {
 
     var idx = binary_search_by_pcap_secs(search_in, pcap_secs, 0);
 
-    var typestr_translate = function(d) {
-        return ordered_arrays[d.typestr] * 18 // 18 is height per line in typestr
-    }
-
-    d = closest_to_y(search_in, idx, x, y, typestr_translate, field);
+    // todo: fix!  very broken finding y
+    var translate_y_func = string_translate(field);
+    d = closest_to_y(search_in, idx, x, y, translate_y_func, field);
     return d;
+}
+
+function string_translate(field) {
+    var height_multiplier = 4;
+    if (field == 'typestr') {
+        height_multiplier = 18
+    }
+    return function(d) {
+        return ordered_strings[field][d[field]] * height_multiplier;
+    }
 }
 
 function find_packet(x, y, field, lock) {
@@ -1481,7 +1481,7 @@ function find_packet(x, y, field, lock) {
 }
 
 function closest_to_y(search_in, idx, x, y, scaled_y, field) {
-    var idx_range = 30;
+    var idx_range = 50;
     var x_range = 10;
     var scaled_x = scaled('pcap_secs');
 
@@ -1517,12 +1517,20 @@ function closest_to_y(search_in, idx, x, y, scaled_y, field) {
 }
 
 function update_crosshairs(d) {
+    // todo: make this work for typestr and stringid
     var detailedInfo = d;
 
     for (var r_field in reticle) {
         var closest_x = scaled('pcap_secs')(d);
-        var closest_y = scaled(r_field)(d);
-
+        if (r_field == 'typestr' || r_field == 'streamId') {
+            var height_multiplier = 4;
+            if (r_field == 'typestr') {
+                height_multiplier = 18
+            }
+            var closest_y = ordered_strings[r_field][d[r_field]] * height_multiplier;
+        } else {
+            var closest_y = scaled(r_field)(d);
+        }
         reticle[r_field].select('.x')
             .attr('transform', 'translate(' + closest_x + 10 + ',0)');
 
@@ -1550,9 +1558,8 @@ function highlight_stream(d) {
     d3.selectAll(".selected_partialMatch_upstream").classed("selected_partialMatch_upstream", false).attr("height", dimensions.height.bar_height_unselected)
 
     if (d.streamId != "badpacket---badpacket") {
-
         // remove bad selections
-        d3.selectAll(".selected_bad").classed("selected_bad", false);
+        d3.selectAll(".badpacket").classed("selected_bad", false);
         d3.selectAll(".stream_badpacket---badpacket").filter('.legend').classed("selected_bad", false);
 
         if (stream2packetsDict[d.streamId].direction == "upstream") {
@@ -1600,7 +1607,7 @@ function select_stream(d) {
         d3.selectAll(".selected_upstream").classed("selected_upstream", false);
         d3.selectAll(".selected_partialMatch_downstream").classed("selected_partialMatch_downstream", false);
         d3.selectAll(".selected_partialMatch_upstream").classed("selected_partialMatch_upstream", false);
-        d3.selectAll(".bad").classed("selected_bad", false);
+        d3.selectAll(".badpacket").classed("selected_bad", false);
         state.selected_data.stream = null;
         state.selected_data.access = null;
         state.selected_data.station = null;
