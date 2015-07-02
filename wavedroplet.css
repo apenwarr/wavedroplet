@@ -53,6 +53,15 @@
       fill: grey;
     }
 
+    .axis_string text {
+      font-family: sans-serif;
+      font-size: 10px;
+      fill: grey;
+    }
+
+    .axis_string.streamId text {
+      font-size: 6px;
+    }
 
     .focus {
       opacity: 1;

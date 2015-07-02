@@ -47,12 +47,13 @@ var dimensions = {
         bar_height_unselected: 12,
         bar_height_selected: 15,
         split_factor: .4,
-        butter_bar: 30
+        butter_bar: 30,
     },
     width: {
         chart: 0,
         y_axis: 60,
         sidebar: 180,
+        right_labels: 200
     },
 }
 
@@ -154,14 +155,16 @@ var field_settings = {
         'scale_type': 'linear',
         'height_factor': 1,
         'translate_label': 60,
-        'chart_height': 200
+        'chart_height': 200,
+        'element_height': 5,
     },
     'typestr': {
         'value_type': 'typestr',
         'scale_type': 'linear',
         'height_factor': 1,
         'translate_label': 60,
-        'chart_height': 200
+        'chart_height': 200,
+        'element_height': 18,
     }
 }
 
@@ -449,6 +452,7 @@ function init(json) {
         })
     }
     ordered_strings['typestr']['undefined'] = ordered_arrays['typestr'].length;
+    ordered_arrays['typestr'].push('undefined')
 }
 
 // helper functions for init
@@ -722,7 +726,7 @@ function visualize(field) {
     var mainChart = d3.select('body')
         .append('svg')
         .attr('class', 'plot_' + field)
-        .attr('width', dimensions.width.chart + dimensions.width.y_axis)
+        .attr('width', dimensions.width.chart + dimensions.width.y_axis + dimensions.width.right_labels)
         .attr('height', field_settings[field].chart_height + dimensions.height.x_axis + dimensions.height.above_charts + dimensions.height.below_charts)
         .append("g")
         .attr("transform", "translate(" + dimensions.page.left + "," + dimensions.height.above_charts + ")");;
@@ -801,7 +805,7 @@ function enter_typestr_boxes(svg, string_list) {
     svg.enter()
         .append('rect')
         .attr('x', scaled('pcap_secs'))
-        .attr('y', string_y('typestr', string_list, 18))
+        .attr('y', string_y('typestr', string_list, field_settings['typestr'].element_height))
         .attr('width', 2)
         .attr('height', function(d) {
             if (determine_selected_class(d) == "" || determine_selected_class(d) == "badpacket") {
@@ -935,7 +939,7 @@ function determine_selected_class(d) {
 
 function visualize_typestr(svg) {
 
-    field_settings.typestr.chart_height = (ordered_arrays['typestr'].length + 1) * 18;
+    field_settings.typestr.chart_height = (ordered_arrays['typestr'].length + 1) * field_settings['typestr'].element_height;
     d3.selectAll(".plot_" + "typestr").attr("height", field_settings.typestr.chart_height +
         dimensions.height.x_axis +
         dimensions.height.above_charts +
@@ -953,7 +957,7 @@ function visualize_typestr(svg) {
 
     // x and y axis
     draw_metric_x_axis(svg, 'typestr');
-    //draw_string_y_axis(svg, field);
+    draw_string_y_axis(svg, 'typestr', ordered_arrays['typestr'], field_settings['typestr'].element_height)
 
     // Add crosshairs
     setup_crosshairs('typestr', svg)
@@ -967,7 +971,7 @@ function visualize_typestr(svg) {
 
 function visualize_strings(field, svg) {
 
-    field_settings[field].chart_height = ordered_arrays[field].length * 4 + 20;
+    field_settings[field].chart_height = ordered_arrays[field].length * field_settings[field].element_height + 20;
     d3.selectAll(".plot_" + field).attr("height", field_settings[field].chart_height +
         dimensions.height.x_axis +
         dimensions.height.above_charts +
@@ -978,7 +982,7 @@ function visualize_strings(field, svg) {
 
     // x and y axis
     draw_metric_x_axis(svg, field);
-    //draw_string_y_axis(svg, field);
+    draw_string_y_axis(svg, 'streamId', ordered_arrays['streamId'], field_settings[field].element_height)
 
     // Add crosshairs
     setup_crosshairs(field, svg)
@@ -1056,7 +1060,7 @@ function enter_points_strings(svg, string_list, fieldName) {
             return 'points_strings' + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d)
         })
         .attr('cx', scaled('pcap_secs'))
-        .attr('cy', string_y(fieldName, string_list, 4))
+        .attr('cy', string_y(fieldName, string_list, field_settings[fieldName].element_height))
         .attr('r', 1.5);
 }
 
@@ -1082,6 +1086,29 @@ function draw_metric_y_axis(svg, fieldName) {
         //  .attr('transform', 'translate(' + (dimensions.width.chart) + ',0)')
         .call(yAxis);
 }
+
+function draw_string_y_axis(svg, field, string_list, line_height) {
+    // y axis
+    svg.append('g')
+        .attr('class', 'axis_string y ' + field)
+        .selectAll(".labels_" + field)
+        .data(string_list)
+        .enter()
+        .append("text")
+        .attr("x", dimensions.width.chart + 5)
+        .attr("y", function(d, i) {
+            return (i + .5) * line_height
+        })
+        .attr("class", '.labels_' + field)
+        .text(function(d) {
+            if (field == 'streamId') {
+                return to_visible_stream_key(d)
+            } else {
+                return d
+            }
+        })
+}
+
 
 function draw_metric_x_axis(svg, fieldName) {
     // title for plot
@@ -1221,14 +1248,6 @@ function update_pcaps_domain(newDomain, transition_bool) {
 
             // enter
             enter_retrybad_boxes_by_dataset(bool_boxes_current)
-
-            // PERCENT CHART
-            /* percent area
-            d3.selectAll(".percent_area")
-                .attr("d", function(d) {
-                    return retrybad_percent_area(d);
-                })
-*/
         }
     })
 }
@@ -1337,11 +1356,7 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
                 }
             } else {
                 // no drag, hover over nearest packet
-                if (fieldName == 'typestr' || fieldName == 'streamId') {
-                    var d = find_packet_string(d3.mouse(this)[0], d3.mouse(this)[1], fieldName, true);
-                } else {
-                    var d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], fieldName, true);
-                }
+                var d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], fieldName, true);
                 if (!d) return;
                 update_crosshairs(d);
             }
@@ -1426,37 +1441,10 @@ function draw_crosshairs(element, field) {
         .attr('dy', '-.5em');
 }
 
-// todo: recombine with find_packet
-function find_packet_string(x, y, field, lock) {
-    if (x < state.scales['pcap_secs'].range()[0] ||
-        x > state.scales['pcap_secs'].range()[1] ||
-        y > total_height)
-        return;
-
-    var pcap_secs = state.scales['pcap_secs'].invert(x);
-
-    // search in closest 100ms of data points
-    var search_in = dict_by_ms[Math.floor(pcap_secs * 10)];
-
-    if (state.selected_data.stream && lock) {
-        search_in = stream2packetsDict[state.selected_data.stream].values;
-    }
-
-    var idx = binary_search_by_pcap_secs(search_in, pcap_secs, 0);
-
-    // todo: fix!  very broken finding y
-    var translate_y_func = string_translate(field);
-    d = closest_to_y(search_in, idx, x, y, translate_y_func, field);
-    return d;
-}
 
 function string_translate(field) {
-    var height_multiplier = 4;
-    if (field == 'typestr') {
-        height_multiplier = 18
-    }
     return function(d) {
-        return ordered_strings[field][d[field]] * height_multiplier;
+        return ordered_strings[field][d[field]] * field_settings[field].element_height;
     }
 }
 
@@ -1476,7 +1464,12 @@ function find_packet(x, y, field, lock) {
     }
 
     var idx = binary_search_by_pcap_secs(search_in, pcap_secs, 0);
-    d = closest_to_y(search_in, idx, x, y, scaled(field), field);
+    if (field == 'typestr' || field == 'streamId') {
+        var translate_y_func = string_translate(field);
+        d = closest_to_y(search_in, idx, x, y, translate_y_func, field);
+    } else {
+        d = closest_to_y(search_in, idx, x, y, scaled(field), field);
+    }
     return d;
 }
 
@@ -1523,11 +1516,7 @@ function update_crosshairs(d) {
     for (var r_field in reticle) {
         var closest_x = scaled('pcap_secs')(d);
         if (r_field == 'typestr' || r_field == 'streamId') {
-            var height_multiplier = 4;
-            if (r_field == 'typestr') {
-                height_multiplier = 18
-            }
-            var closest_y = ordered_strings[r_field][d[r_field]] * height_multiplier;
+            var closest_y = ordered_strings[r_field][d[r_field]] * field_settings[r_field].element_height;
         } else {
             var closest_y = scaled(r_field)(d);
         }
