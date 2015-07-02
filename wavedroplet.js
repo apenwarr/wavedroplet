@@ -45,7 +45,7 @@ var dimensions = {
         below_charts: 10,
         tooltip: 15,
         bar_height_unselected: 12,
-        bar_height_selected: 15,
+        bar_height_selected: 14,
         split_factor: .4,
         butter_bar: 30,
     },
@@ -105,7 +105,7 @@ var field_settings = {
         'scale_type': 'linear',
         'height_factor': 1,
         'translate_label': 60,
-        'chart_height': 150
+        'chart_height': 120
     },
     'rate': {
         'value_type': 'number',
@@ -164,7 +164,7 @@ var field_settings = {
         'height_factor': 1,
         'translate_label': 60,
         'chart_height': 200,
-        'element_height': 18,
+        'element_height': 16,
     }
 }
 
@@ -405,8 +405,12 @@ function init(json) {
         var k = to_ta_ra_from_stream_key(stream);
         if (addresses[k[0]].type == 'access' || addresses[k[1]].type == 'station') {
             stream2packetsDict[stream].direction = 'downstream';
+            stream2packetsDict[stream].access = k[0];
+            stream2packetsDict[stream].station = k[1]
         } else if (addresses[k[1]].type == 'access' || addresses[k[0]].type == 'station') {
             stream2packetsDict[stream].direction = 'upstream';
+            stream2packetsDict[stream].access = k[1];
+            stream2packetsDict[stream].station = k[0]
         } else {
             log(stream, 'direction not found')
         }
@@ -425,23 +429,9 @@ function init(json) {
         count = count + d.y;
     })
 
-    // sort streams by number of packets per stream
-    ordered_arrays['streamId'].sort(function(a, b) {
-        return stream2packetsDict[b].values.length - stream2packetsDict[a].values.length
-    })
-
-    // created ordered string list for streamId
-    if (state.to_plot.indexOf("streamId") != -1) {
-        ordered_arrays['streamId'].forEach(function(stream, i) {
-            ordered_strings['streamId'][stream] = i;
-        })
-    }
-
     if (state.to_plot.indexOf("typestr") != -1) {
         // alphabetical (numeric) order for typestr, since then it's consistent from dataset to dataset
-        ordered_arrays['typestr'].sort(function(a, b) {
-            return a - b
-        })
+        ordered_arrays['typestr'].sort()
         ordered_arrays['typestr'].forEach(function(type, i) {
             ordered_strings['typestr'][type] = i;
         })
@@ -507,7 +497,7 @@ function draw() {
         visualize(d)
     })
 
-    add_legend();
+    //   add_legend();
 
     add_tooltip();
 }
@@ -634,6 +624,11 @@ function add_legend() {
     var n_cols = Math.floor(dimensions.width.chart / key_length);
     var n_rows = Math.ceil(ordered_arrays['streamId'].length / n_cols)
     var legend_line_height = 24;
+
+    // sort streams by number of packets per stream
+    ordered_arrays['streamId'].sort(function(a, b) {
+        return stream2packetsDict[b].values.length - stream2packetsDict[a].values.length
+    })
 
     d3.select('body')
         .append('svg')
@@ -966,6 +961,23 @@ function visualize_typestr(svg) {
 
 function visualize_strings(field, svg) {
 
+    if (field == 'streamId') {
+        ordered_arrays.streamId.sort(function(a, b) {
+            if (stream2packetsDict[a].access != stream2packetsDict[b].access) {
+                return stream2packetsDict[a].access.localeCompare(stream2packetsDict[b].access);
+            } else {
+                return stream2packetsDict[a].station.localeCompare(stream2packetsDict[b].station);
+            }
+        })
+
+        // created ordered string list for streamId
+        if (state.to_plot.indexOf("streamId") != -1) {
+            ordered_arrays['streamId'].forEach(function(stream, i) {
+                ordered_strings['streamId'][stream] = i;
+            })
+        }
+    }
+
     field_settings[field].chart_height = ordered_arrays[field].length * field_settings[field].element_height;
     d3.selectAll(".plot_" + field).attr("height", field_settings[field].chart_height +
         dimensions.height.x_axis +
@@ -977,10 +989,10 @@ function visualize_strings(field, svg) {
 
     // x and y axis
     draw_metric_x_axis(svg, field);
-    if (field != 'streamId') {
-        draw_string_y_axis(svg, field, ordered_arrays[field], field_settings[field].element_height)
-    }
-    // Add crosshairs
+    // if (field != 'streamId') {
+    draw_string_y_axis(svg, field, ordered_arrays[field], field_settings[field].element_height)
+        //  }
+        // Add crosshairs
     setup_crosshairs(field, svg)
     draw_crosshairs(reticle[field], field);
 
