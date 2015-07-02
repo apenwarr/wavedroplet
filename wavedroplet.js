@@ -322,10 +322,6 @@ function init(json) {
     // get user selection regarding "1D Ack"
     var show_ack = get_query_param('ack')[0];
 
-    // prep for typestr chart
-    // todo: only do this if doing the chart?
-    var typestr_count = {};
-
     dataset.forEach(function(d) {
 
         // check for 1D ACK and skip, if appropriate
@@ -336,12 +332,10 @@ function init(json) {
                 d.ta = 'badpacket';
                 d.ra = 'badpacket';
             } else {
-                // count typestr only for good packets
-                if (!typestr_count[d.typestr]) {
-                    typestr_count[d.typestr] = 1;
-                    ordered_arrays['typestr'].push(d.typestr);
-                } else {
-                    typestr_count[d.typestr]++
+                // for good packets, create list of unique typestrings
+                // worried this is slow :(, but the array should be small
+                if (ordered_arrays.typestr.indexOf(d.typestr) == -1) {
+                    ordered_arrays.typestr.push(d.typestr);
                 }
             }
             if (d.ta == null) {
@@ -444,15 +438,16 @@ function init(json) {
     }
 
     if (state.to_plot.indexOf("typestr") != -1) {
+        // alphabetical (numeric) order for typestr, since then it's consistent from dataset to dataset
         ordered_arrays['typestr'].sort(function(a, b) {
-            return typestr_count[b] - typestr_count[a]
+            return a - b
         })
         ordered_arrays['typestr'].forEach(function(type, i) {
             ordered_strings['typestr'][type] = i;
         })
+        ordered_strings['typestr']['undefined'] = ordered_arrays['typestr'].length;
+        ordered_arrays['typestr'].push('undefined')
     }
-    ordered_strings['typestr']['undefined'] = ordered_arrays['typestr'].length;
-    ordered_arrays['typestr'].push('undefined')
 }
 
 // helper functions for init
@@ -971,7 +966,7 @@ function visualize_typestr(svg) {
 
 function visualize_strings(field, svg) {
 
-    field_settings[field].chart_height = ordered_arrays[field].length * field_settings[field].element_height + 20;
+    field_settings[field].chart_height = ordered_arrays[field].length * field_settings[field].element_height;
     d3.selectAll(".plot_" + field).attr("height", field_settings[field].chart_height +
         dimensions.height.x_axis +
         dimensions.height.above_charts +
@@ -982,8 +977,9 @@ function visualize_strings(field, svg) {
 
     // x and y axis
     draw_metric_x_axis(svg, field);
-    draw_string_y_axis(svg, 'streamId', ordered_arrays['streamId'], field_settings[field].element_height)
-
+    if (field != 'streamId') {
+        draw_string_y_axis(svg, field, ordered_arrays[field], field_settings[field].element_height)
+    }
     // Add crosshairs
     setup_crosshairs(field, svg)
     draw_crosshairs(reticle[field], field);
