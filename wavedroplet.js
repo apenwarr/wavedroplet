@@ -157,11 +157,11 @@ var field_settings = {
         'chart_height': 200
     },
     'typestr': {
-        'value_type': 'string',
+        'value_type': 'typestr',
         'scale_type': 'linear',
         'height_factor': 1,
         'translate_label': 60,
-        'chart_height': 100
+        'chart_height': 200
     }
 }
 
@@ -737,7 +737,7 @@ function visualize(field) {
     } else if (field_settings[field].value_type == 'string') {
         visualize_strings(field, mainChart);
     } else if (field_settings[field].value_type == 'typestr') {
-        visualize_typestr(field, mainChart);
+        visualize_typestr(mainChart);
     }
 
 }
@@ -811,7 +811,7 @@ function enter_typestr_boxes(svg, string_list) {
     svg.enter()
         .append('rect')
         .attr('x', scaled('pcap_secs'))
-        .attr('y', string_y('typestr', string_list, 12))
+        .attr('y', string_y('typestr', string_list, 18))
         .attr('width', 2)
         .attr('height', function(d) {
             if (determine_selected_class(d) == "" || determine_selected_class(d) == "badpacket") {
@@ -821,7 +821,7 @@ function enter_typestr_boxes(svg, string_list) {
             }
         })
         .attr("class", function(d) {
-            return 'bool_boxes ' + 'typestr' + " " + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d);
+            return 'bool_boxes_typestr' + " " + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d);
         })
         .on("click", function(d) {
             highlight_stream(d)
@@ -944,29 +944,33 @@ function determine_selected_class(d) {
 }
 
 function visualize_typestr(svg) {
-    /*
-        var height = ordered_arrays['typestr'].length * 4 + 20;
-        d3.selectAll(".plot_" + "typestr").attr("height", height)
-        field_settings.typestr.height_factor = height / dimensions.height.per_chart
 
-        // set up vertical boxes 
-        var boxes = svg.append('g').attr("class", 'typestr_boxes_' + field).attr("fill", "grey")
+    var height = ordered_arrays['typestr'].length * 22;
+    d3.selectAll(".plot_" + "typestr").attr("height", height)
+    field_settings.typestr.height_factor = height / dimensions.height.per_chart
 
-        // draw points
-        enter_typestr_boxes(boxes, ordered_strings.typestr);
+    // set up vertical boxes 
+    var boxes = svg.append('g').attr("class", 'typestr_boxes_' + 'typestr').attr("fill", "grey")
 
-        // x and y axis
-        draw_metric_x_axis(svg, field);
-        //draw_string_y_axis(svg, field);
+    // draw points
+    enter_typestr_boxes(boxes.selectAll('.bool_boxes_typestr')
+        .data(dataset, function(d) {
+            return d.pcap_secs
+        }),
+        ordered_strings.typestr);
 
-        // Add crosshairs
-        setup_crosshairs(field, svg)
-        draw_crosshairs(reticle[field]);
+    // x and y axis
+    draw_metric_x_axis(svg, 'typestr');
+    //draw_string_y_axis(svg, field);
 
-        // append the rectangle to capture mouse movements
-        draw_rect_for_zooming(svg, height)
-        draw_hidden_rect_for_mouseover(svg, field)
-        */
+    // Add crosshairs
+    setup_crosshairs('typestr', svg)
+    draw_vertical(reticle['typestr'], 'typestr');
+
+    // append the rectangle to capture mouse movements
+    draw_rect_for_zooming(svg, height)
+    draw_hidden_rect_for_mouseover(svg, 'typestr')
+
 }
 
 function visualize_strings(field, svg) {
@@ -1113,6 +1117,7 @@ function update_pcaps_domain(newDomain, transition_bool) {
     var trimmed_data = trim_by_pcap_secs(dataset);
 
     // for each chart: select w/ new dataset, then exit/enter/update 
+    // todo: tighten these functions
     state.to_plot.forEach(function(fieldName) {
         if (field_settings[fieldName].value_type == 'number') {
             // select
@@ -1133,6 +1138,29 @@ function update_pcaps_domain(newDomain, transition_bool) {
 
             // enter
             enter_points(points, fieldName)
+
+        }
+
+        if (field_settings[fieldName].value_type == 'typestr') {
+            // select
+            var typestr_boxes_current = d3.select(".typestr_boxes_typestr")
+                .selectAll(".bool_boxes_typestr")
+                .data(trimmed_data, function(d) {
+                    return d.pcap_secs
+                })
+
+            // exit 
+            typestr_boxes_current.exit().remove()
+
+            // update
+            if (transition_bool) {
+                typestr_boxes_current.transition().duration(zoom_duration).attr('x', scaled('pcap_secs'));
+            } else {
+                typestr_boxes_current.attr('x', scaled('pcap_secs'));
+            }
+
+            // enter
+            enter_typestr_boxes(typestr_boxes_current, ordered_strings.typestr)
 
         }
 
@@ -1158,11 +1186,6 @@ function update_pcaps_domain(newDomain, transition_bool) {
         }
 
         if (field_settings[fieldName].value_type == 'boolean') {
-            /* percent area
-            d3.selectAll(".percent_area_chart_boolean_" + fieldName)
-                .attr("d", boolean_percent_of_total_area_setup(trimmed_data, fieldName, scaled('pcap_secs')));
-                */
-
             // select
             var bool_boxes_current = d3.select(".boolean_boxes_" + fieldName)
                 .selectAll(".bool_boxes_rect_" + fieldName)
@@ -1322,9 +1345,11 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
                 }
             } else {
                 // no drag, hover over nearest packet
-
-                // TODO: debounce here
-                var d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], fieldName, true);
+                if (fieldName == 'typestr') {
+                    var d = find_packet_string(d3.mouse(this)[0], d3.mouse(this)[1], fieldName, true);
+                } else {
+                    var d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], fieldName, true);
+                }
                 if (!d) return;
                 update_crosshairs(d);
             }
@@ -1407,6 +1432,32 @@ function draw_crosshairs(element, field) {
         .attr('class', 'y1')
         .attr('dx', 8)
         .attr('dy', '-.5em');
+}
+
+// todo: recombine with find_packet
+function find_packet_string(x, y, field, lock) {
+    if (x < state.scales['pcap_secs'].range()[0] ||
+        x > state.scales['pcap_secs'].range()[1] ||
+        y > total_height)
+        return;
+
+    var pcap_secs = state.scales['pcap_secs'].invert(x);
+
+    // search in closest 100ms of data points
+    var search_in = dict_by_ms[Math.floor(pcap_secs * 10)];
+
+    if (state.selected_data.stream && lock) {
+        search_in = stream2packetsDict[state.selected_data.stream].values;
+    }
+
+    var idx = binary_search_by_pcap_secs(search_in, pcap_secs, 0);
+
+    var typestr_translate = function(d) {
+        return ordered_arrays[d.typestr] * 18 // 18 is height per line in typestr
+    }
+
+    d = closest_to_y(search_in, idx, x, y, typestr_translate, field);
+    return d;
 }
 
 function find_packet(x, y, field, lock) {
