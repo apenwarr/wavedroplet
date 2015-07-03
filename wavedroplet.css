@@ -34,6 +34,10 @@
       stroke-width: 2px;
     }
 
+    text {
+      fill: grey;
+    }
+
     .axis path,
     .axis line {
       fill: none;
@@ -87,12 +91,17 @@
       fill: #185195;
     }
 
+    .focus cross-line {
+      stroke-width: 1px;
+    }
+
+
     #tooltip {
       position: absolute;
       width: 200px;
       height: auto;
       padding: 5px 10px;
-      font-weight: 700;
+      font-weight: 500;
       background-color: rgba(255, 255, 255, 0.7);
       -webkit-box-shadow: 0 0 5px rgba(0, 0, 0, 0.7);
       -moz-box-shadow: 0 0 5px rgba(0, 0, 0, 0.7);

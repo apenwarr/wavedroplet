@@ -38,7 +38,7 @@ var total_height = w.innerHeight || e.clientHeight || g.clientHeight;
 // set chart dimensions
 var dimensions = {
     page: {
-        left: 80,
+        left: 50,
         top: 30
     },
     height: {
@@ -52,11 +52,12 @@ var dimensions = {
         bar_height_selected: 14,
         split_factor: .4,
         butter_bar: 30,
+        cum_height: 0
     },
     width: {
         chart: 0,
         y_axis: 60,
-        sidebar: 180,
+        sidebar: 80,
         right_labels: 200
     },
 }
@@ -179,7 +180,7 @@ for (var i in selectableMetrics) {
             'value_type': 'number',
             'scale_type': 'linear',
             'height_factor': 1,
-            'translate_label': 60,
+            'translate_label': 100,
             'chart_height': 100
         }
     }
@@ -521,7 +522,7 @@ function add_overview() {
     // set up x and y axis
     var overviewYaxis = d3.svg.axis()
         .scale(state.scales['packetNumPerTenth'])
-        .orient('left')
+        .orient('right')
         .ticks(5);
 
     var overviewXaxis = d3.svg.axis()
@@ -531,15 +532,18 @@ function add_overview() {
         .ticks(5);
 
     // start building the chart
+    var height = dimensions.height.overview + dimensions.height.x_axis + dimensions.height.above_charts + dimensions.height.below_charts;
     var overviewChart = d3
         .select('body')
         .append('svg')
         .attr('id', 'histogramZoomNav')
         .attr('class', 'overviewChart')
-        .attr('width', dimensions.width.chart + dimensions.width.y_axis)
-        .attr('height', dimensions.height.overview + dimensions.height.x_axis + dimensions.height.above_charts + dimensions.height.below_charts)
+        .attr('width', dimensions.width.chart + dimensions.width.y_axis + dimensions.width.sidebar)
+        .attr('height', height)
         .append("g")
         .attr("transform", "translate(" + dimensions.page.left + ",0)");
+
+    dimensions.height.cum_height = dimensions.height.cum_height + height;
 
     // append x and y axis
     overviewChart.append('g')
@@ -549,6 +553,7 @@ function add_overview() {
 
     overviewChart.append('g')
         .attr('class', 'axis y overview')
+        .attr('transform', 'translate(' + (dimensions.width.chart) + ',0)')
         .call(overviewYaxis);
 
     // draw bars
@@ -589,6 +594,8 @@ function add_butter_bar() {
         .attr('id', 'butter_bar')
         .attr('width', dimensions.width.chart)
         .attr('height', dimensions.height.butter_bar);
+
+    dimensions.height.cum_height = dimensions.height.cum_height + dimensions.height.butter_bar;
 
     svg.append('rect')
         .attr('id', 'butter_bar_box')
@@ -695,10 +702,11 @@ function add_tooltip() {
 }
 
 function update_show_Tooltip(data, location) {
+    console.log(location)
 
     d3.select('#tooltip')
-        .style('left', (location[0] + 40) + "px")
-        .style('top', (location[1] + 10) + "px")
+        .style('left', (location[0] + 50) + "px")
+        .style('top', (location[1] - 20) + "px")
         .classed('hidden', false)
         .selectAll(".tooltipValues")
         .data(availableMetrics)
@@ -716,13 +724,17 @@ function update_show_Tooltip(data, location) {
 function visualize(field) {
 
     // set up main svg for plot
+    var height = field_settings[field].chart_height + dimensions.height.x_axis + dimensions.height.above_charts + dimensions.height.below_charts;
     var mainChart = d3.select('body')
         .append('svg')
         .attr('class', 'plot_' + field)
         .attr('width', dimensions.width.chart + dimensions.width.y_axis + dimensions.width.right_labels)
-        .attr('height', field_settings[field].chart_height + dimensions.height.x_axis + dimensions.height.above_charts + dimensions.height.below_charts)
+        .attr('height', height)
         .append("g")
         .attr("transform", "translate(" + dimensions.page.left + "," + dimensions.height.above_charts + ")");;
+
+    field_settings[field].svg_height = dimensions.height.cum_height + dimensions.height.above_charts;
+    dimensions.height.cum_height = dimensions.height.cum_height + dimensions.height.above_charts + height;
 
     // call function based on value type
     if (field_settings[field].value_type == 'number') {
@@ -1064,13 +1076,13 @@ function string_y(fieldName, string_list, height_per_line) {
 function draw_metric_y_axis(svg, fieldName) {
     var yAxis = d3.svg.axis()
         .scale(state.scales[fieldName])
-        .orient('left')
+        .orient('right')
         .ticks(5);
 
     // y axis
     svg.append('g')
         .attr('class', 'axis y')
-        //  .attr('transform', 'translate(' + (dimensions.width.chart) + ',0)')
+        .attr('transform', 'translate(' + (dimensions.width.chart) + ',0)')
         .call(yAxis);
 }
 
@@ -1145,7 +1157,7 @@ function draw_string_y_axis(svg, field, string_list, line_height) {
 function draw_metric_x_axis(svg, fieldName) {
     // title for plot
     svg.append("text")
-        .attr('transform', 'translate(-40,' + field_settings[fieldName].translate_label + ') rotate(-90)')
+        .attr('transform', 'translate(-10,' + field_settings[fieldName].translate_label + ') rotate(-90)')
         .attr("class", "text-label")
         .text(fieldName);
 
@@ -1390,7 +1402,7 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
                 // no drag, hover over nearest packet
                 var d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], fieldName, true);
                 if (!d) return;
-                update_crosshairs(d, [d3.event.clientX, d3.event.clientY]);
+                update_crosshairs(d, true, fieldName);
             }
         })
 }
@@ -1439,7 +1451,7 @@ function on_click(location, field) {
     d = find_packet(location[0], location[1], field, false);
     if (!d) return;
     select_stream(d);
-    update_crosshairs(d);
+    update_crosshairs(d, false, field);
 }
 
 function draw_vertical(element, field) {
@@ -1447,6 +1459,11 @@ function draw_vertical(element, field) {
         .attr('class', 'x')
         .attr('y1', 0)
         .attr('y2', field_settings[field].chart_height);
+
+    element.append('line')
+        .attr('class', 'cross-line')
+        .attr('x1', 0)
+        .attr('x2', dimensions.width.chart);
 }
 
 function draw_crosshairs(element, field) {
@@ -1493,7 +1510,7 @@ function find_packet(x, y, field, lock) {
     }
 
     var idx = binary_search_by_pcap_secs(search_in, pcap_secs, 0);
-    if (field == 'typestr' || field == 'streamId') {
+    if (field == 'typestr' || field == 'streamId' || field_settings[field].type == 'boolean' || field == 'retry-bad') {
         var translate_y_func = string_translate(field);
         d = closest_to_y(search_in, idx, x, y, translate_y_func, field);
     } else {
@@ -1538,14 +1555,16 @@ function closest_to_y(search_in, idx, x, y, scaled_y, field) {
     return search_in[closest_idx];
 }
 
-function update_crosshairs(d, location) {
+function update_crosshairs(d, tooltip, field) {
     // todo: make this work for typestr and stringid
     var detailedInfo = d;
 
     for (var r_field in reticle) {
+        var element_height = field_settings[r_field].element_height;
+
         var closest_x = scaled('pcap_secs')(d);
         if (r_field == 'typestr' || r_field == 'streamId') {
-            var closest_y = ordered_strings[r_field][d[r_field]] * field_settings[r_field].element_height;
+            var closest_y = ordered_strings[r_field][d[r_field]] * element_height;
         } else {
             var closest_y = scaled(r_field)(d);
         }
@@ -1556,15 +1575,24 @@ function update_crosshairs(d, location) {
             .attr('transform',
                 'translate(' + closest_x + ',' + closest_y + ')');
 
+        reticle[r_field].select('.cross-line')
+            .attr('transform',
+                'translate(0,' + (closest_y + element_height / 2) + ')');
+
         if (!isNaN(closest_y)) {
             reticle[r_field].select('.y')
                 .attr('transform', 'translate(0,' + closest_y + ')');
+        } else {
+            // reverse from d value to y value? --> for boolean, strings, etc
+        }
+
+        if (tooltip & r_field == field) {
+            console.log(field, closest_x, dimensions.page.left, closest_y, field_settings[field].svg_height)
+            update_show_Tooltip(detailedInfo, [closest_x + dimensions.page.left, closest_y + field_settings[field].svg_height]);
         }
     }
 
-    if (location) {
-        update_show_Tooltip(detailedInfo, location);
-    }
+
 }
 
 function highlight_stream(d) {
