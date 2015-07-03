@@ -4,13 +4,17 @@
 Possible Next Steps: 
 
 Switch to Canvas for all but overview chart: faster than SVG, major advantage of SVG is selecting elements but we're not using that feature because of doing binary search instead to find closest point
-      * alternatively, switch to voronoi to manage selecting nearest point: http://bl.ocks.org/mbostock/8033015
+      * alternatively, switch to voronoi to manage selecting nearest point: http://bl.ocks.org/mbostock/8033015, or just use points themselves?
 
 Could use an adjacency matrix for mac addresses to see what's talking to what - a version is checked into zanarmstrong's wavedroplet repo
 
 Turn overview histogram into stacked histogram, with colors to show bad/retry/good packets
 
 Identify streams with numbers instead of strings to speed up code, dictionary for visible
+
+Zooming sometimes buggy
+
+Make everything faster!  
 */
 
 // debugging
@@ -676,7 +680,6 @@ function add_legend() {
 
 function add_tooltip() {
     d3.select('#tooltip')
-        .style('top', dimensions.page.top + 'px')
         .classed('hidden', true)
         .append("svg")
         .attr("width", dimensions.width.sidebar - 10)
@@ -691,8 +694,11 @@ function add_tooltip() {
         });
 }
 
-function update_show_Tooltip(data) {
+function update_show_Tooltip(data, location) {
+
     d3.select('#tooltip')
+        .style('left', (location[0] + 40) + "px")
+        .style('top', (location[1] + 10) + "px")
         .classed('hidden', false)
         .selectAll(".tooltipValues")
         .data(availableMetrics)
@@ -755,6 +761,7 @@ function visualize_boolean(field, svg) {
 
     // rect for zooming
     draw_rect_for_zooming(svg, field_settings[field].chart_height)
+    draw_hidden_rect_for_mouseover(svg, field)
 }
 
 function setup_crosshairs(field, svg) {
@@ -785,6 +792,7 @@ function visualize_retrybad(svg) {
 
     // zooming object
     draw_rect_for_zooming(svg, field_settings['retry-bad'].chart_height)
+    draw_hidden_rect_for_mouseover(svg, 'retry-bad')
 }
 
 function enter_typestr_boxes(svg, string_list) {
@@ -803,16 +811,6 @@ function enter_typestr_boxes(svg, string_list) {
         })
         .attr("class", function(d) {
             return 'bool_boxes_typestr' + " " + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d);
-        })
-        .on("click", function(d) {
-            highlight_stream(d)
-        })
-        .on("mouseover", function(d) {
-            d3.select('#tooltip').classed("hidden", false)
-            update_crosshairs(d);
-        })
-        .on("mouseout", function(d) {
-            d3.select('#tooltip').classed("hidden", true)
         })
 }
 
@@ -847,16 +845,6 @@ function enter_boolean_boxes_by_dataset(fieldName, svg) {
         .attr("class", function(d) {
             return 'bool_boxes bool_boxes_rect_' + fieldName + " " + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d);
         })
-        .on("click", function(d) {
-            highlight_stream(d)
-        })
-        .on("mouseover", function(d) {
-            d3.select('#tooltip').classed("hidden", false)
-            update_crosshairs(d);
-        })
-        .on("mouseout", function(d) {
-            d3.select('#tooltip').classed("hidden", true)
-        })
 }
 
 function enter_retrybad_boxes_by_dataset(svg) {
@@ -886,16 +874,7 @@ function enter_retrybad_boxes_by_dataset(svg) {
         .attr("class", function(d) {
             return 'bool_boxes_rect_retry-bad' + " " + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d);
         })
-        .on("click", function(d) {
-            highlight_stream(d)
-        })
-        .on("mouseover", function(d) {
-            d3.select('#tooltip').classed("hidden", false)
-            update_crosshairs(d);
-        })
-        .on("mouseout", function(d) {
-            d3.select('#tooltip').classed("hidden", true)
-        })
+
 }
 
 function determine_selected_class(d) {
@@ -1411,7 +1390,7 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
                 // no drag, hover over nearest packet
                 var d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], fieldName, true);
                 if (!d) return;
-                update_crosshairs(d);
+                update_crosshairs(d, [d3.event.clientX, d3.event.clientY]);
             }
         })
 }
@@ -1446,11 +1425,8 @@ function end_drag(positive_diff, mouse_start, mouse_x) {
 }
 
 function hide_if_out_of_range(x) {
-    if (x < state.scales['pcap_secs'].range()[0] ||
-        x > state.scales['pcap_secs'].range()[1]) {
-        d3.select('#tooltip').classed("hidden", true)
-        d3.selectAll(".focus").classed("hidden", true)
-    }
+    d3.select('#tooltip').classed("hidden", true)
+    d3.selectAll(".focus").classed("hidden", true)
 }
 
 function hide_element(element) {
@@ -1562,7 +1538,7 @@ function closest_to_y(search_in, idx, x, y, scaled_y, field) {
     return search_in[closest_idx];
 }
 
-function update_crosshairs(d) {
+function update_crosshairs(d, location) {
     // todo: make this work for typestr and stringid
     var detailedInfo = d;
 
@@ -1586,7 +1562,9 @@ function update_crosshairs(d) {
         }
     }
 
-    update_show_Tooltip(detailedInfo);
+    if (location) {
+        update_show_Tooltip(detailedInfo, location);
+    }
 }
 
 function highlight_stream(d) {
