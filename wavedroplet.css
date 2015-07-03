@@ -63,6 +63,10 @@
       font-size: 6px;
     }
 
+    .axis_string text:hover {
+      font-size: 14px;
+    }
+
     .focus {
       opacity: 1;
       stroke: #185195;

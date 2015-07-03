@@ -325,7 +325,7 @@ function init(json) {
     dataset.forEach(function(d) {
 
         // check for 1D ACK and skip, if appropriate
-        if (!(show_ack == false & d.type_str == "1D ACK")) {
+        if (show_ack == true || d.typestr != "1D ACK") {
 
             // replace ta/ra if packet is bad, or ta is null
             if (d.bad == 1) {
@@ -701,9 +701,6 @@ function update_show_Tooltip(data) {
                 return k + ": " + to_visible_stream_key(data[k]);
             }
             if (k == "ta" || k == "ra") {
-                if (typeof(addresses[data[k]]) == undefined) {
-                    console.log(data[k])
-                }
                 return k + ": " + addresses[data[k]].name
             }
             return k + ": " + data[k]
@@ -989,10 +986,13 @@ function visualize_strings(field, svg) {
 
     // x and y axis
     draw_metric_x_axis(svg, field);
-    // if (field != 'streamId') {
-    draw_string_y_axis(svg, field, ordered_arrays[field], field_settings[field].element_height)
-        //  }
-        // Add crosshairs
+    if (field == 'streamId') {
+        draw_string_y_axis_streamId(svg, 'streamId', ordered_arrays.streamId, field_settings.streamId.element_height)
+    } else {
+        draw_string_y_axis(svg, field, ordered_arrays[field], field_settings[field].element_height)
+    }
+
+    // Add crosshairs
     setup_crosshairs(field, svg)
     draw_crosshairs(reticle[field], field);
 
@@ -1095,7 +1095,52 @@ function draw_metric_y_axis(svg, fieldName) {
         .call(yAxis);
 }
 
+function draw_string_y_axis_streamId(svg, field, string_list, line_height) {
+    var access_point_list = [];
+
+    string_list.forEach(function(d) {
+        if (!addresses[stream2packetsDict[d].access].num_streams) {
+            addresses[stream2packetsDict[d].access].num_streams = 1;
+            access_point_list.push(stream2packetsDict[d].access)
+        } else {
+            addresses[stream2packetsDict[d].access].num_streams++
+        }
+    })
+
+    var cumSum = 0;
+    var cumSum2 = 0;
+    var current_access_point;
+    // y axis
+    var axisgroup = svg.append('g')
+        .attr('class', 'axis_string y ' + field)
+        .selectAll(".labels_" + field)
+        .data(access_point_list)
+        .enter()
+
+    axisgroup.append("text")
+        .attr("x", dimensions.width.chart + 14)
+        .attr("y", function(d, i) {
+            var currentSum = cumSum;
+            cumSum = cumSum + addresses[d].num_streams;
+            return (currentSum + .5) * line_height;
+            // return (i + .5) * line_height
+        })
+        .attr("class", '.labels_' + field)
+        .text(function(d) {
+            return addresses[d].name
+        })
+
+    axisgroup.append("polyline").attr("points", function(d) {
+        var currentSum = cumSum2;
+        cumSum2 = cumSum2 + addresses[d].num_streams;
+        return (dimensions.width.chart + 12) + "," + (currentSum * line_height) + " " +
+            (dimensions.width.chart + 4) + "," + (currentSum * line_height) + " " +
+            (dimensions.width.chart + 4) + "," + ((cumSum2 - 1) * line_height);
+    }).attr("stroke", "grey").attr("fill", "none")
+}
+
 function draw_string_y_axis(svg, field, string_list, line_height) {
+
     // y axis
     svg.append('g')
         .attr('class', 'axis_string y ' + field)
