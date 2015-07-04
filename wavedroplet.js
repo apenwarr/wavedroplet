@@ -805,36 +805,6 @@ function setup_crosshairs(field, svg) {
         .style('display', null);
 }
 
-function visualize_retrybad(svg) {
-    ordered_strings['retry_bad'] = {
-        1: 0,
-        0: 1
-    }
-
-    var boolean_boxes = svg.append('g').attr("class", 'boolean_boxes_retry_bad').attr("fill", "grey")
-
-    // box charts
-    enter_retrybad_boxes_by_dataset(
-        boolean_boxes.selectAll('.bool_boxes_rect_retry_bad')
-        .data(dataset, function(d) {
-            return d.pcap_secs
-        }));
-
-    // To include dripping percent chart, uncomment the line below - also, fix spacing
-    //draw_retrybad_percent_chart(svg);
-
-    // x axis
-    draw_metric_x_axis(svg, 'retry_bad');
-
-    // Add crosshairs
-    setup_crosshairs('retry_bad', svg)
-    draw_vertical(reticle['retry_bad'], 'retry_bad');
-
-    // zooming object
-    draw_rect_for_zooming(svg, field_settings['retry_bad'].chart_height)
-    draw_hidden_rect_for_mouseover(svg, 'retry_bad')
-}
-
 function enter_stringbox_boxes(svg, string_list, field) {
 
     svg.enter()
@@ -885,36 +855,6 @@ function enter_boolean_boxes_by_dataset(fieldName, svg) {
         .attr("class", function(d) {
             return 'bool_boxes bool_boxes_rect_' + fieldName + " " + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d);
         })
-}
-
-function enter_retrybad_boxes_by_dataset(svg) {
-
-    svg.enter()
-        .append('rect')
-        .attr('x', scaled('pcap_secs'))
-        .attr('y', function(d) {
-            // order is bad on top, then retry, the all: note that if it's bad AND retry, it counts only as bad
-            if (d['bad'] == 1) {
-                return 0
-            } else if (d['retry'] == 1) {
-                return dimensions.height.bar_height_selected + 4
-            } else {
-                return 2 * (dimensions.height.bar_height_selected + 4)
-            }
-        })
-        .attr('width', 1)
-        .attr('height', function(d) {
-            // selected rectangles are taller/longer
-            if (determine_selected_class(d) == "" || determine_selected_class(d) == "badpacket") {
-                return dimensions.height.bar_height_unselected;
-            } else {
-                return dimensions.height.bar_height_selected;
-            }
-        })
-        .attr("class", function(d) {
-            return 'bool_boxes_rect_retry_bad' + " " + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d);
-        })
-
 }
 
 function determine_selected_class(d) {
@@ -1300,29 +1240,6 @@ function update_pcaps_domain(newDomain, transition_bool) {
             enter_boolean_boxes_by_dataset(fieldName, bool_boxes_current)
 
         }
-
-        if (field_settings[fieldName].value_type == 'retrybad') {
-
-            // select
-            var bool_boxes_current = d3.select(".boolean_boxes_retry_bad")
-                .selectAll(".bool_boxes_rect_retry_bad")
-                .data(trimmed_data, function(d) {
-                    return d.pcap_secs
-                })
-
-            // exit 
-            bool_boxes_current.exit().remove()
-
-            // update
-            if (transition_bool) {
-                bool_boxes_current.transition().duration(zoom_duration).attr('x', scaled('pcap_secs'));
-            } else {
-                bool_boxes_current.attr('x', scaled('pcap_secs'));
-            }
-
-            // enter
-            enter_retrybad_boxes_by_dataset(bool_boxes_current)
-        }
     })
 }
 
@@ -1690,9 +1607,6 @@ function select_stream(d) {
         state.selected_data.stream = null;
         state.selected_data.access = null;
         state.selected_data.station = null;
-
-        d3.selectAll(".bool_boxes_rect_retry_bad")
-            .attr('height', dimensions.height.bar_height_unselected)
 
         butter_bar('Unlocked')
     }
