@@ -705,7 +705,7 @@ function add_tooltip() {
     d3.select('#tooltip')
         .classed('hidden', true)
         .append("svg")
-        .attr("width", dimensions.width.sidebar - 10)
+        .attr("width", 180)
         .attr("height", availableMetrics.length * dimensions.height.tooltip)
         .selectAll('.tooltipValues')
         .data(availableMetrics)
@@ -739,69 +739,60 @@ function update_show_Tooltip(data, location) {
 function visualize(field) {
 
     // set up main svg for plot
-    var height = field_settings[field].chart_height + dimensions.height.x_axis + dimensions.height.above_charts + dimensions.height.below_charts;
     var mainChart = d3.select('body')
         .append('svg')
         .attr('class', 'plot_' + field)
         .attr('width', dimensions.width.chart + dimensions.width.y_axis + dimensions.width.right_labels)
-        .attr('height', height)
         .append("g")
         .attr("transform", "translate(" + dimensions.page.left + "," + dimensions.height.above_charts + ")");;
 
+    // call function based on value type
+    if (field_settings[field].value_type == 'number') {
+        settings_numbers(field, mainChart)
+    } else if (field_settings[field].value_type == 'boolean') {
+        settings_boolean(field, mainChart);
+    } else if (field_settings[field].value_type == 'string') {
+        settings_strings(field, mainChart);
+    } else if (field_settings[field].value_type == 'stringbox') {
+        settings_stringbox(field, mainChart);
+    }
+
+    var height = field_settings[field].chart_height + dimensions.height.x_axis + dimensions.height.above_charts + dimensions.height.below_charts;
+    d3.selectAll(".plot_" + field).attr("height", height)
+
+    // keep track of cumulative height
     field_settings[field].svg_height = dimensions.height.cum_height + dimensions.height.above_charts;
     dimensions.height.cum_height = dimensions.height.cum_height + dimensions.height.above_charts + height;
 
+    mainChart = mainChart.append('g').attr("class", field + "_container").attr("fill", "grey")
+
+    var svg = mainChart
+        .selectAll('.' + field + '_elements')
+        .data(dataset, function(d) {
+            return d.pcap_secs
+        });
+
     // call function based on value type
-    if (field_settings[field].value_type == 'number') {
-        visualize_numbers(field, mainChart)
-    } else if (field_settings[field].value_type == 'boolean') {
-        visualize_boolean(field, mainChart);
-    } else if (field_settings[field].value_type == 'string') {
-        visualize_strings(field, mainChart);
-    } else if (field_settings[field].value_type == 'stringbox') {
-        visualize_stringbox(field, mainChart);
+    field_settings[field].enter_elements(svg, field);
+
+    // x and y axis
+    draw_metric_x_axis(mainChart, field);
+    field_settings[field].y_axis_setup(mainChart, field);
+
+    // Add crosshairs
+    setup_crosshairs(field, mainChart);
+    if (field_settings[field].element_type == 'box') {
+        draw_vertical(reticle[field], field);
+    } else {
+        draw_crosshairs(reticle[field], field);
     }
 
+    // append the rectangle to capture mouse movements
+    draw_rect_for_zooming(mainChart, field_settings[field].chart_height);
+    draw_hidden_rect_for_mouseover(mainChart, field);
 }
 
 // HELPER FUNCTIONS FOR VISUALIZATION
-
-function visualize_boolean(field, svg) {
-
-    if (field != 'spatialstreams') {
-        ordered_strings[field] = {
-            1: 0,
-            0: 1
-        }
-    } else {
-        ordered_strings[field] = {
-            2: 0,
-            1: 1
-        }
-    }
-
-    field_settings[field].x_metric = "x"
-
-    // set up vertical boxes 
-    var boolean_boxes = svg.append('g').attr("fill", "grey").attr("class", field + "_container")
-
-    enter_boolean_boxes_by_dataset(field,
-        boolean_boxes.selectAll('.' + field + "_elements")
-        .data(dataset, function(d) {
-            return d.pcap_secs
-        }));
-
-    // x axis
-    draw_metric_x_axis(svg, field);
-
-    // Add crosshairs
-    setup_crosshairs(field, svg)
-    draw_vertical(reticle[field], field);
-
-    // rect for zooming
-    draw_rect_for_zooming(svg, field_settings[field].chart_height)
-    draw_hidden_rect_for_mouseover(svg, field)
-}
 
 function setup_crosshairs(field, svg) {
     reticle[field] = svg.append('g')
@@ -828,20 +819,20 @@ function enter_stringbox_boxes(svg, string_list, field) {
         })
 }
 
-function enter_boolean_boxes_by_dataset(fieldName, svg) {
+function enter_boolean_boxes_by_dataset(field, svg) {
 
     svg.enter()
         .append('rect')
         .attr('x', scaled('pcap_secs'))
         .attr('y', function(d) {
-            if (fieldName != 'spatialstreams') {
-                if (d[fieldName] == 1) {
+            if (field != 'spatialstreams') {
+                if (d[field] == 1) {
                     return 0
                 } else {
                     return dimensions.height.bar_height_selected + 4
                 }
             } else {
-                if (d[fieldName] == 2) {
+                if (d[field] == 2) {
                     return 0
                 } else {
                     return dimensions.height.bar_height_selected + 4
@@ -857,7 +848,7 @@ function enter_boolean_boxes_by_dataset(fieldName, svg) {
             }
         })
         .attr("class", function(d) {
-            return fieldName + "_elements " + 'boxes' + " " + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d);
+            return field + "_elements " + 'boxes' + " " + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d);
         })
 }
 
@@ -887,49 +878,59 @@ function determine_selected_class(d) {
     }
 }
 
-function visualize_stringbox(field, svg) {
+function settings_boolean(field, svg) {
 
-    field_settings[field].x_metric = "x"
+    // since boolean, set up strings for labels + crossovers
+    if (field != 'spatialstreams') {
+        ordered_strings[field] = {
+            1: 0,
+            0: 1
+        };
+        ordered_arrays[field] = [1, 0];
+    } else {
+        ordered_strings[field] = {
+            2: 0,
+            1: 1
+        };
+        ordered_arrays[field] = [2, 1];
+    }
 
-    field_settings[field].chart_height = (ordered_arrays[field].length) * field_settings[field].element_height;
-
-    // update height based on length of array
-    d3.selectAll(".plot_" + field).attr("height", field_settings[field].chart_height +
-        dimensions.height.x_axis +
-        dimensions.height.above_charts +
-        dimensions.height.below_charts);
-
-    // set up vertical boxes 
-    var boxes = svg.append('g').attr("class", field + "_container").attr("fill", "grey")
-
-    // draw points
-    enter_stringbox_boxes(boxes.selectAll('.' + field + "_elements")
-        .data(dataset, function(d) {
-            return d.pcap_secs
-        }),
-        ordered_strings[field],
-        field);
-
-    // x and y axis
-    draw_metric_x_axis(svg, field);
-    draw_string_y_axis(svg, field, ordered_arrays[field], field_settings[field].element_height)
-
-    // Add crosshairs
-    setup_crosshairs(field, svg)
-    draw_vertical(reticle[field], field);
-
-    // append the rectangle to capture mouse movements
-    draw_rect_for_zooming(svg, field_settings[field].chart_height)
-    draw_hidden_rect_for_mouseover(svg, field)
-
+    // set up type specific metrics
+    field_settings[field].x_metric = "x";
+    field_settings[field].enter_elements = function(current, field) {
+        return enter_boolean_boxes_by_dataset(field, current)
+    };
+    field_settings[field].element_type = "box"
+    field_settings[field].y_axis_setup = function(svg, field) {
+        return draw_string_y_axis(svg, field);
+    }
 }
 
-function visualize_strings(field, svg) {
-    console.log(field)
 
+function settings_stringbox(field, svg) {
+
+    // update field settings appropriate for field type stringbox
+    field_settings[field].x_metric = "x"
+    field_settings[field].enter_elements = function(current, field) {
+        return enter_stringbox_boxes(current, ordered_strings[field], field)
+    }
+    field_settings[field].chart_height = (ordered_arrays[field].length) * field_settings[field].element_height;
+    field_settings[field].element_type = "box"
+    field_settings[field].y_axis_setup = function(svg, field) {
+        return draw_string_y_axis(svg, field);
+    }
+}
+
+
+function settings_strings(field, svg) {
     field_settings[field].x_metric = "cx"
+    field_settings[field].enter_elements = function(current, field) {
+        return enter_points_strings(current, ordered_strings[field], field)
+    }
+    field_settings[field].element_type = "point"
 
     if (field == 'streamId') {
+        // sort by AP mac address, then by station mac address
         ordered_arrays.streamId.sort(function(a, b) {
             if (stream2packetsDict[a].access != stream2packetsDict[b].access) {
                 return stream2packetsDict[a].access.localeCompare(stream2packetsDict[b].access);
@@ -944,55 +945,31 @@ function visualize_strings(field, svg) {
                 ordered_strings['streamId'][stream] = i;
             })
         }
+
+        field_settings[field].y_axis_setup = function(svg, field) {
+            return draw_string_y_axis_streamId(svg, field);
+        }
+    } else {
+        field_settings[field].y_axis_setup = function(svg, field) {
+            return draw_string_y_axis(svg, field);
+        }
     }
 
     field_settings[field].chart_height = ordered_arrays[field].length * field_settings[field].element_height;
-    d3.selectAll(".plot_" + field).attr("height", field_settings[field].chart_height +
-        dimensions.height.x_axis +
-        dimensions.height.above_charts +
-        dimensions.height.below_charts)
-
-    // draw points
-    draw_points_strings(field, svg, ordered_strings[field]);
-
-    // x and y axis
-    console.log(svg, field)
-    draw_metric_x_axis(svg, field);
-    if (field == 'streamId') {
-        draw_string_y_axis_streamId(svg, 'streamId', ordered_arrays.streamId, field_settings.streamId.element_height)
-    } else {
-        draw_string_y_axis(svg, field, ordered_arrays[field], field_settings[field].element_height)
-    }
-
-    // Add crosshairs
-    setup_crosshairs(field, svg)
-    draw_crosshairs(reticle[field], field);
-
-    // append the rectangle to capture mouse movements
-    draw_rect_for_zooming(svg, field_settings[field].chart_height)
-    draw_hidden_rect_for_mouseover(svg, field)
 }
 
-function visualize_numbers(field, svg) {
+function settings_numbers(field, svg) {
     // for circles
     field_settings[field].x_metric = "cx"
-
-    setup_crosshairs(field, svg)
-
-    // draw points
-    draw_points(field, svg);
-
-    // x and y axis
-    draw_metric_x_axis(svg, field);
-    draw_metric_y_axis(svg, field);
-
-    // Add crosshairs
-    draw_crosshairs(reticle[field], field);
-
-    // append the rectangle to capture mouse movements
-    draw_rect_for_zooming(svg, field_settings[field].chart_height)
-    draw_hidden_rect_for_mouseover(svg, field)
+    field_settings[field].enter_elements = function(current, field) {
+        return enter_points(current, field);
+    }
+    field_settings[field].element_type = "point"
+    field_settings[field].y_axis_setup = function(svg, field) {
+        return draw_metric_y_axis(svg, field);
+    }
 }
+
 
 function draw_rect_for_zooming(svg, height) {
     svg.append("rect")
@@ -1005,13 +982,7 @@ function draw_rect_for_zooming(svg, height) {
 
 function draw_points(field, svg) {
     enter_points(
-        svg.append('g')
-        .attr("class", field + '_container')
-        .attr("fill", 'grey')
-        .selectAll('.' + field + '_elements')
-        .data(dataset, function(d) {
-            return d.pcap_secs
-        }),
+        svg,
         field)
 
 }
@@ -1028,12 +999,7 @@ function enter_points(svg, field) {
 }
 
 function draw_points_strings(field, svg, string_list) {
-    enter_points_strings(svg.append('g').attr("class", field + '_container')
-        .attr("fill", 'grey')
-        .selectAll('.' + field + 'elements')
-        .data(dataset, function(d) {
-            return d.pcap_secs
-        }), string_list, field)
+    enter_points_strings(svg, string_list, field)
 }
 
 function enter_points_strings(svg, string_list, field) {
@@ -1047,9 +1013,9 @@ function enter_points_strings(svg, string_list, field) {
         .attr('r', 1.5);
 }
 
-function string_y(fieldName, string_list, height_per_line) {
+function string_y(field, string_list, height_per_line) {
     return function(d) {
-        var idx = string_list[d[fieldName]];
+        var idx = string_list[d[field]];
         if (typeof(idx) == "undefined") {
             idx = string_list['undefined'];
         }
@@ -1057,9 +1023,9 @@ function string_y(fieldName, string_list, height_per_line) {
     }
 }
 
-function draw_metric_y_axis(svg, fieldName) {
+function draw_metric_y_axis(svg, field) {
     var yAxis = d3.svg.axis()
-        .scale(state.scales[fieldName])
+        .scale(state.scales[field])
         .orient('right')
         .ticks(5);
 
@@ -1070,10 +1036,11 @@ function draw_metric_y_axis(svg, fieldName) {
         .call(yAxis);
 }
 
-function draw_string_y_axis_streamId(svg, field, string_list, line_height) {
+function draw_string_y_axis_streamId(svg, field) {
     var access_point_list = [];
+    var line_height = field_settings[field].element_height;
 
-    string_list.forEach(function(d) {
+    ordered_arrays[field].forEach(function(d) {
         if (!addresses[stream2packetsDict[d].access].num_streams) {
             addresses[stream2packetsDict[d].access].num_streams = 1;
             access_point_list.push(stream2packetsDict[d].access)
@@ -1114,13 +1081,14 @@ function draw_string_y_axis_streamId(svg, field, string_list, line_height) {
     }).attr("stroke", "grey").attr("fill", "none")
 }
 
-function draw_string_y_axis(svg, field, string_list, line_height) {
+function draw_string_y_axis(svg, field) {
+    var line_height = field_settings[field].element_height;
 
     // y axis
     svg.append('g')
         .attr('class', 'axis_string y ' + field)
         .selectAll(".labels_" + field)
-        .data(string_list)
+        .data(ordered_arrays[field])
         .enter()
         .append("text")
         .attr("x", dimensions.width.chart + 5)
@@ -1138,18 +1106,18 @@ function draw_string_y_axis(svg, field, string_list, line_height) {
 }
 
 
-function draw_metric_x_axis(svg, fieldName) {
+function draw_metric_x_axis(svg, field) {
 
     // title for plot
     svg.append("text")
-        .attr('transform', 'translate(-10,' + field_settings[fieldName].translate_label + ') rotate(-90)')
+        .attr('transform', 'translate(-10,' + field_settings[field].translate_label + ') rotate(-90)')
         .attr("class", "text-label")
-        .text(fieldName);
+        .text(field);
 
     // x axis
     var xaxis = svg.append('g')
         .attr('class', 'axis x metric')
-        .attr('transform', 'translate(0,' + (field_settings[fieldName].chart_height) + ')')
+        .attr('transform', 'translate(0,' + (field_settings[field].chart_height) + ')')
 
     xaxis.call(pcapSecsAxis);
 }
@@ -1166,10 +1134,11 @@ function update_pcaps_domain(newDomain, transition_bool) {
 
     // for each chart: select w/ new dataset, then exit/enter/update 
     // todo: tighten these functions
-    state.to_plot.forEach(function(fieldName) {
+    state.to_plot.forEach(function(field) {
+
         // select
-        var current = d3.select("." + fieldName + "_container")
-            .selectAll("." + fieldName + "_elements")
+        var current = d3.select("." + field + "_container")
+            .selectAll("." + field + "_elements")
             .data(trimmed_data, function(d) {
                 return d.pcap_secs
             })
@@ -1179,25 +1148,14 @@ function update_pcaps_domain(newDomain, transition_bool) {
 
         // update
         if (transition_bool) {
-            current.transition().duration(zoom_duration).attr(field_settings[fieldName].x_metric, scaled('pcap_secs'));
+            current.transition().duration(zoom_duration).attr(field_settings[field].x_metric, scaled('pcap_secs'));
         } else {
-            current.attr(field_settings[fieldName].x_metric, scaled('pcap_secs'));
+            current.attr(field_settings[field].x_metric, scaled('pcap_secs'));
         }
 
         // enter
-        if (field_settings[fieldName].value_type == 'boolean') {
-            enter_boolean_boxes_by_dataset(fieldName, current)
-        } else if (field_settings[fieldName].value_type == 'stringbox') {
-            console.log(fieldName)
-            enter_stringbox_boxes(current, ordered_strings[fieldName], fieldName)
-        } else if (field_settings[fieldName].value_type == 'string') {
-            enter_points_strings(current, ordered_strings[fieldName], fieldName)
-        } else if (field_settings[fieldName].value_type == 'number') {
-            enter_points(current, fieldName)
-        }
-
+        field_settings[field].enter_elements(current, field);
     })
-
 }
 
 // UPDATE HELPER FUNCTIONS
@@ -1224,7 +1182,7 @@ function zoomOut() {
 }
 
 // helper functions for selection - currently only implemented on point charts
-function draw_hidden_rect_for_mouseover(svg, fieldName) {
+function draw_hidden_rect_for_mouseover(svg, field) {
 
     var click_timeout; // to call/cancel timeout for clicks vs double clicks
     var dragging = false; // during drag or not
@@ -1236,7 +1194,7 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
     // add rectangle to monitor mouse events
     svg.append('rect')
         .attr('width', dimensions.width.chart)
-        .attr('height', field_settings[fieldName].chart_height)
+        .attr('height', field_settings[field].chart_height)
         .attr("class", "plotRect")
         .style('fill', 'none')
         .style('pointer-events', 'all')
@@ -1272,7 +1230,7 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
             } else if (event_list[event_list.length - 2] == 'mousedown') {
                 clicks++
                 if (clicks == 1) {
-                    click_timeout = window.setTimeout(on_click, 200, d3.mouse(this), fieldName); // plan for single click
+                    click_timeout = window.setTimeout(on_click, 200, d3.mouse(this), field); // plan for single click
                 } else {
                     // if double click
                     window.clearTimeout(click_timeout); // cancel single click
@@ -1304,9 +1262,9 @@ function draw_hidden_rect_for_mouseover(svg, fieldName) {
                 }
             } else {
                 // no drag, hover over nearest packet
-                var d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], fieldName, true);
+                var d = find_packet(d3.mouse(this)[0], d3.mouse(this)[1], field, true);
                 if (!d) return;
-                update_crosshairs(d, true, fieldName);
+                update_crosshairs(d, true, field);
             }
         })
 }
