@@ -112,6 +112,7 @@
     #tooltip text {
       margin: 0;
       font-size: 12px;
+      fill: black;
     }
 
     .hidden {

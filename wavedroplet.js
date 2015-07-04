@@ -119,26 +119,29 @@ var field_settings = {
         'translate_label': 60,
         'chart_height': 100
     },
-    'retry-bad': {
-        'value_type': 'retrybad',
+    'retry_bad': {
+        'value_type': 'stringbox',
         'scale_type': 'linear',
         'height_factor': .54,
         'translate_label': 60,
-        'chart_height': 60
+        'chart_height': 60,
+        'element_height': dimensions.height.bar_height_selected + 2
     },
     'retry': {
         'value_type': 'boolean',
         'scale_type': 'linear',
         'height_factor': dimensions.height.split_factor,
         'translate_label': 30,
-        'chart_height': 40
+        'chart_height': 40,
+        'element_height': 16,
     },
     'bad': {
         'value_type': 'boolean',
         'scale_type': 'linear',
         'height_factor': dimensions.height.split_factor,
         'translate_label': 30,
-        'chart_height': 40
+        'chart_height': 40,
+        'element_height': dimensions.height.bar_height_selected + 2,
     },
     'bw': {
         'value_type': 'boolean',
@@ -164,12 +167,12 @@ var field_settings = {
         'element_height': 5,
     },
     'typestr': {
-        'value_type': 'typestr',
+        'value_type': 'stringbox',
         'scale_type': 'linear',
         'height_factor': 1,
         'translate_label': 60,
         'chart_height': 200,
-        'element_height': 16,
+        'element_height': dimensions.height.bar_height_selected + 2,
     }
 }
 
@@ -211,11 +214,17 @@ var dataset; // all packets, sorted by pcap_secs
 var stream2packetsDict = {}; // look up values and direction by streamId
 var ordered_strings = {
     "streamId": {},
-    "typestr": {}
+    "typestr": {},
+    "retry_bad": {
+        'bad': 0,
+        'retry': 1,
+        'good': 2
+    }
 }
 var ordered_arrays = {
     "streamId": [],
-    "typestr": []
+    "typestr": [],
+    "retry_bad": ['bad', 'retry', 'good'],
 }
 
 var addresses = {
@@ -336,7 +345,13 @@ function init(json) {
             if (d.bad == 1) {
                 d.ta = 'badpacket';
                 d.ra = 'badpacket';
+                d.retry_bad = 'bad';
             } else {
+                if (d.retry == 1) {
+                    d.retry_bad = 'retry';
+                } else {
+                    d.retry_bad = 'good';
+                }
                 // for good packets, create list of unique typestrings
                 // worried this is slow :(, but the array should be small
                 if (ordered_arrays.typestr.indexOf(d.typestr) == -1) {
@@ -702,11 +717,10 @@ function add_tooltip() {
 }
 
 function update_show_Tooltip(data, location) {
-    console.log(location)
 
     d3.select('#tooltip')
         .style('left', (location[0] + 50) + "px")
-        .style('top', (location[1] - 20) + "px")
+        .style('top', (location[1] + 20) + "px")
         .classed('hidden', false)
         .selectAll(".tooltipValues")
         .data(availableMetrics)
@@ -741,12 +755,10 @@ function visualize(field) {
         visualize_numbers(field, mainChart)
     } else if (field_settings[field].value_type == 'boolean') {
         visualize_boolean(field, mainChart);
-    } else if (field_settings[field].value_type == 'retrybad') {
-        visualize_retrybad(mainChart);
     } else if (field_settings[field].value_type == 'string') {
         visualize_strings(field, mainChart);
-    } else if (field_settings[field].value_type == 'typestr') {
-        visualize_typestr(mainChart);
+    } else if (field_settings[field].value_type == 'stringbox') {
+        visualize_stringbox(field, mainChart);
     }
 
 }
@@ -755,6 +767,17 @@ function visualize(field) {
 
 function visualize_boolean(field, svg) {
 
+    if (field != 'spatialstreams') {
+        ordered_strings[field] = {
+            1: 0,
+            0: 1
+        }
+    } else {
+        ordered_strings[field] = {
+            2: 0,
+            1: 1
+        }
+    }
     // set up vertical boxes 
     var boolean_boxes = svg.append('g').attr("class", 'boolean_boxes_' + field).attr("fill", "grey")
 
@@ -783,11 +806,16 @@ function setup_crosshairs(field, svg) {
 }
 
 function visualize_retrybad(svg) {
-    var boolean_boxes = svg.append('g').attr("class", 'boolean_boxes_retry-bad').attr("fill", "grey")
+    ordered_strings['retry_bad'] = {
+        1: 0,
+        0: 1
+    }
+
+    var boolean_boxes = svg.append('g').attr("class", 'boolean_boxes_retry_bad').attr("fill", "grey")
 
     // box charts
     enter_retrybad_boxes_by_dataset(
-        boolean_boxes.selectAll('.bool_boxes_rect_retry-bad')
+        boolean_boxes.selectAll('.bool_boxes_rect_retry_bad')
         .data(dataset, function(d) {
             return d.pcap_secs
         }));
@@ -796,23 +824,23 @@ function visualize_retrybad(svg) {
     //draw_retrybad_percent_chart(svg);
 
     // x axis
-    draw_metric_x_axis(svg, 'retry-bad');
+    draw_metric_x_axis(svg, 'retry_bad');
 
     // Add crosshairs
-    setup_crosshairs('retry-bad', svg)
-    draw_vertical(reticle['retry-bad'], 'retry-bad');
+    setup_crosshairs('retry_bad', svg)
+    draw_vertical(reticle['retry_bad'], 'retry_bad');
 
     // zooming object
-    draw_rect_for_zooming(svg, field_settings['retry-bad'].chart_height)
-    draw_hidden_rect_for_mouseover(svg, 'retry-bad')
+    draw_rect_for_zooming(svg, field_settings['retry_bad'].chart_height)
+    draw_hidden_rect_for_mouseover(svg, 'retry_bad')
 }
 
-function enter_typestr_boxes(svg, string_list) {
+function enter_stringbox_boxes(svg, string_list, field) {
 
     svg.enter()
         .append('rect')
         .attr('x', scaled('pcap_secs'))
-        .attr('y', string_y('typestr', string_list, field_settings['typestr'].element_height))
+        .attr('y', string_y(field, string_list, field_settings[field].element_height))
         .attr('width', 2)
         .attr('height', function(d) {
             if (determine_selected_class(d) == "" || determine_selected_class(d) == "badpacket") {
@@ -822,7 +850,7 @@ function enter_typestr_boxes(svg, string_list) {
             }
         })
         .attr("class", function(d) {
-            return 'bool_boxes_typestr' + " " + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d);
+            return 'bool_boxes_' + field + " " + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d);
         })
 }
 
@@ -884,7 +912,7 @@ function enter_retrybad_boxes_by_dataset(svg) {
             }
         })
         .attr("class", function(d) {
-            return 'bool_boxes_rect_retry-bad' + " " + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d);
+            return 'bool_boxes_rect_retry_bad' + " " + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d);
         })
 
 }
@@ -915,35 +943,36 @@ function determine_selected_class(d) {
     }
 }
 
-function visualize_typestr(svg) {
+function visualize_stringbox(field, svg) {
 
-    field_settings.typestr.chart_height = (ordered_arrays['typestr'].length + 1) * field_settings['typestr'].element_height;
-    d3.selectAll(".plot_" + "typestr").attr("height", field_settings.typestr.chart_height +
+    field_settings[field].chart_height = (ordered_arrays[field].length) * field_settings[field].element_height;
+    d3.selectAll(".plot_" + field).attr("height", field_settings[field].chart_height +
         dimensions.height.x_axis +
         dimensions.height.above_charts +
         dimensions.height.below_charts);
 
     // set up vertical boxes 
-    var boxes = svg.append('g').attr("class", 'typestr_boxes_' + 'typestr').attr("fill", "grey")
+    var boxes = svg.append('g').attr("class", field + '_boxes_' + field).attr("fill", "grey")
 
     // draw points
-    enter_typestr_boxes(boxes.selectAll('.bool_boxes_typestr')
+    enter_stringbox_boxes(boxes.selectAll('.bool_boxes_' + field)
         .data(dataset, function(d) {
             return d.pcap_secs
         }),
-        ordered_strings.typestr);
+        ordered_strings[field],
+        field);
 
     // x and y axis
-    draw_metric_x_axis(svg, 'typestr');
-    draw_string_y_axis(svg, 'typestr', ordered_arrays['typestr'], field_settings['typestr'].element_height)
+    draw_metric_x_axis(svg, field);
+    draw_string_y_axis(svg, field, ordered_arrays[field], field_settings[field].element_height)
 
     // Add crosshairs
-    setup_crosshairs('typestr', svg)
-    draw_vertical(reticle['typestr'], 'typestr');
+    setup_crosshairs(field, svg)
+    draw_vertical(reticle[field], field);
 
     // append the rectangle to capture mouse movements
-    draw_rect_for_zooming(svg, field_settings.typestr.chart_height)
-    draw_hidden_rect_for_mouseover(svg, 'typestr')
+    draw_rect_for_zooming(svg, field_settings[field].chart_height)
+    draw_hidden_rect_for_mouseover(svg, field)
 
 }
 
@@ -973,6 +1002,7 @@ function visualize_strings(field, svg) {
         dimensions.height.below_charts)
 
     // draw points
+    console.log(ordered_strings, ordered_strings[field], field)
     draw_points_strings(field, svg, ordered_strings[field]);
 
     // x and y axis
@@ -1204,26 +1234,26 @@ function update_pcaps_domain(newDomain, transition_bool) {
 
         }
 
-        if (field_settings[fieldName].value_type == 'typestr') {
+        if (field_settings[fieldName].value_type == 'stringbox') {
             // select
-            var typestr_boxes_current = d3.select(".typestr_boxes_typestr")
-                .selectAll(".bool_boxes_typestr")
+            var stringbox_boxes_current = d3.select("." + fieldName + "_boxes_" + fieldName)
+                .selectAll(".bool_boxes_" + fieldName)
                 .data(trimmed_data, function(d) {
                     return d.pcap_secs
                 })
 
             // exit 
-            typestr_boxes_current.exit().remove()
+            stringbox_boxes_current.exit().remove()
 
             // update
             if (transition_bool) {
-                typestr_boxes_current.transition().duration(zoom_duration).attr('x', scaled('pcap_secs'));
+                stringbox_boxes_current.transition().duration(zoom_duration).attr('x', scaled('pcap_secs'));
             } else {
-                typestr_boxes_current.attr('x', scaled('pcap_secs'));
+                stringbox_boxes_current.attr('x', scaled('pcap_secs'));
             }
 
             // enter
-            enter_typestr_boxes(typestr_boxes_current, ordered_strings.typestr)
+            enter_stringbox_boxes(stringbox_boxes_current, ordered_strings[fieldName], fieldName)
 
         }
 
@@ -1274,8 +1304,8 @@ function update_pcaps_domain(newDomain, transition_bool) {
         if (field_settings[fieldName].value_type == 'retrybad') {
 
             // select
-            var bool_boxes_current = d3.select(".boolean_boxes_retry-bad")
-                .selectAll(".bool_boxes_rect_retry-bad")
+            var bool_boxes_current = d3.select(".boolean_boxes_retry_bad")
+                .selectAll(".bool_boxes_rect_retry_bad")
                 .data(trimmed_data, function(d) {
                     return d.pcap_secs
                 })
@@ -1510,7 +1540,7 @@ function find_packet(x, y, field, lock) {
     }
 
     var idx = binary_search_by_pcap_secs(search_in, pcap_secs, 0);
-    if (field == 'typestr' || field == 'streamId' || field_settings[field].type == 'boolean' || field == 'retry-bad') {
+    if (field_settings[field].type == 'stringbox' || field == 'streamId' || field_settings[field].type == 'boolean') {
         var translate_y_func = string_translate(field);
         d = closest_to_y(search_in, idx, x, y, translate_y_func, field);
     } else {
@@ -1521,7 +1551,7 @@ function find_packet(x, y, field, lock) {
 
 function closest_to_y(search_in, idx, x, y, scaled_y, field) {
     var idx_range = 50;
-    var x_range = 10;
+    var x_range = 30;
     var scaled_x = scaled('pcap_secs');
 
     if (search_in.length > 1) {
@@ -1556,15 +1586,21 @@ function closest_to_y(search_in, idx, x, y, scaled_y, field) {
 }
 
 function update_crosshairs(d, tooltip, field) {
-    // todo: make this work for typestr and stringid
+    // todo: make this work for stringbox and stringid
     var detailedInfo = d;
 
     for (var r_field in reticle) {
-        var element_height = field_settings[r_field].element_height;
 
         var closest_x = scaled('pcap_secs')(d);
-        if (r_field == 'typestr' || r_field == 'streamId') {
+
+        if (field_settings[r_field].value_type == 'stringbox' || r_field == 'streamId' || field_settings[r_field].value_type == 'boolean') {
+            var element_height = field_settings[r_field].element_height;
             var closest_y = ordered_strings[r_field][d[r_field]] * element_height;
+
+            reticle[r_field].select('.cross-line')
+                .attr('transform',
+                    'translate(0,' + (closest_y + element_height / 2) + ')');
+
         } else {
             var closest_y = scaled(r_field)(d);
         }
@@ -1575,10 +1611,6 @@ function update_crosshairs(d, tooltip, field) {
             .attr('transform',
                 'translate(' + closest_x + ',' + closest_y + ')');
 
-        reticle[r_field].select('.cross-line')
-            .attr('transform',
-                'translate(0,' + (closest_y + element_height / 2) + ')');
-
         if (!isNaN(closest_y)) {
             reticle[r_field].select('.y')
                 .attr('transform', 'translate(0,' + closest_y + ')');
@@ -1587,7 +1619,6 @@ function update_crosshairs(d, tooltip, field) {
         }
 
         if (tooltip & r_field == field) {
-            console.log(field, closest_x, dimensions.page.left, closest_y, field_settings[field].svg_height)
             update_show_Tooltip(detailedInfo, [closest_x + dimensions.page.left, closest_y + field_settings[field].svg_height]);
         }
     }
@@ -1660,7 +1691,7 @@ function select_stream(d) {
         state.selected_data.access = null;
         state.selected_data.station = null;
 
-        d3.selectAll(".bool_boxes_rect_retry-bad")
+        d3.selectAll(".bool_boxes_rect_retry_bad")
             .attr('height', dimensions.height.bar_height_unselected)
 
         butter_bar('Unlocked')
