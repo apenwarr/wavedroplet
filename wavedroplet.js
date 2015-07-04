@@ -156,7 +156,8 @@ var field_settings = {
         'scale_type': 'linear',
         'height_factor': .5,
         'translate_label': 84,
-        'chart_height': 50
+        'chart_height': 60,
+        'element_height': dimensions.height.bar_height_selected + 2,
     },
     'streamId': {
         'value_type': 'string',
@@ -778,11 +779,14 @@ function visualize_boolean(field, svg) {
             1: 1
         }
     }
+
+    field_settings[field].x_metric = "x"
+
     // set up vertical boxes 
-    var boolean_boxes = svg.append('g').attr("class", 'boolean_boxes_' + field).attr("fill", "grey")
+    var boolean_boxes = svg.append('g').attr("fill", "grey").attr("class", field + "_container")
 
     enter_boolean_boxes_by_dataset(field,
-        boolean_boxes.selectAll('.bool_boxes_rect_' + field)
+        boolean_boxes.selectAll('.' + field + "_elements")
         .data(dataset, function(d) {
             return d.pcap_secs
         }));
@@ -820,7 +824,7 @@ function enter_stringbox_boxes(svg, string_list, field) {
             }
         })
         .attr("class", function(d) {
-            return 'bool_boxes_' + field + " " + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d);
+            return 'boxes ' + field + "_elements " + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d);
         })
 }
 
@@ -853,7 +857,7 @@ function enter_boolean_boxes_by_dataset(fieldName, svg) {
             }
         })
         .attr("class", function(d) {
-            return 'bool_boxes bool_boxes_rect_' + fieldName + " " + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d);
+            return fieldName + "_elements " + 'boxes' + " " + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d);
         })
 }
 
@@ -885,17 +889,21 @@ function determine_selected_class(d) {
 
 function visualize_stringbox(field, svg) {
 
+    field_settings[field].x_metric = "x"
+
     field_settings[field].chart_height = (ordered_arrays[field].length) * field_settings[field].element_height;
+
+    // update height based on length of array
     d3.selectAll(".plot_" + field).attr("height", field_settings[field].chart_height +
         dimensions.height.x_axis +
         dimensions.height.above_charts +
         dimensions.height.below_charts);
 
     // set up vertical boxes 
-    var boxes = svg.append('g').attr("class", field + '_boxes_' + field).attr("fill", "grey")
+    var boxes = svg.append('g').attr("class", field + "_container").attr("fill", "grey")
 
     // draw points
-    enter_stringbox_boxes(boxes.selectAll('.bool_boxes_' + field)
+    enter_stringbox_boxes(boxes.selectAll('.' + field + "_elements")
         .data(dataset, function(d) {
             return d.pcap_secs
         }),
@@ -917,6 +925,9 @@ function visualize_stringbox(field, svg) {
 }
 
 function visualize_strings(field, svg) {
+    console.log(field)
+
+    field_settings[field].x_metric = "cx"
 
     if (field == 'streamId') {
         ordered_arrays.streamId.sort(function(a, b) {
@@ -942,10 +953,10 @@ function visualize_strings(field, svg) {
         dimensions.height.below_charts)
 
     // draw points
-    console.log(ordered_strings, ordered_strings[field], field)
     draw_points_strings(field, svg, ordered_strings[field]);
 
     // x and y axis
+    console.log(svg, field)
     draw_metric_x_axis(svg, field);
     if (field == 'streamId') {
         draw_string_y_axis_streamId(svg, 'streamId', ordered_arrays.streamId, field_settings.streamId.element_height)
@@ -963,6 +974,9 @@ function visualize_strings(field, svg) {
 }
 
 function visualize_numbers(field, svg) {
+    // for circles
+    field_settings[field].x_metric = "cx"
+
     setup_crosshairs(field, svg)
 
     // draw points
@@ -989,47 +1003,47 @@ function draw_rect_for_zooming(svg, height) {
         .attr("class", "drag_rect hidden")
 }
 
-function draw_points(fieldName, svg) {
+function draw_points(field, svg) {
     enter_points(
         svg.append('g')
-        .attr("class", 'pcap_vs_' + fieldName + " metricChart")
+        .attr("class", field + '_container')
         .attr("fill", 'grey')
-        .selectAll('.points_numbers')
+        .selectAll('.' + field + '_elements')
         .data(dataset, function(d) {
             return d.pcap_secs
         }),
-        fieldName)
+        field)
 
 }
 
-function enter_points(svg, fieldName) {
+function enter_points(svg, field) {
     svg.enter()
         .append('circle')
         .attr('class', function(d) {
-            return 'points_numbers' + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d)
+            return field + '_elements' + " points " + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d)
         })
         .attr('cx', scaled('pcap_secs'))
-        .attr('cy', scaled(fieldName))
+        .attr('cy', scaled(field))
         .attr('r', 1.5);
 }
 
-function draw_points_strings(fieldName, svg, string_list) {
-    enter_points_strings(svg.append('g').attr("class", 'pcap_vs_' + fieldName + " metricChart")
+function draw_points_strings(field, svg, string_list) {
+    enter_points_strings(svg.append('g').attr("class", field + '_container')
         .attr("fill", 'grey')
-        .selectAll('.points_strings')
+        .selectAll('.' + field + 'elements')
         .data(dataset, function(d) {
             return d.pcap_secs
-        }), string_list, fieldName)
+        }), string_list, field)
 }
 
-function enter_points_strings(svg, string_list, fieldName) {
+function enter_points_strings(svg, string_list, field) {
     svg.enter()
         .append('circle')
         .attr('class', function(d) {
-            return 'points_strings' + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d)
+            return field + '_elements ' + ' points ' + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d)
         })
         .attr('cx', scaled('pcap_secs'))
-        .attr('cy', string_y(fieldName, string_list, field_settings[fieldName].element_height))
+        .attr('cy', string_y(field, string_list, field_settings[field].element_height))
         .attr('r', 1.5);
 }
 
@@ -1125,6 +1139,7 @@ function draw_string_y_axis(svg, field, string_list, line_height) {
 
 
 function draw_metric_x_axis(svg, fieldName) {
+
     // title for plot
     svg.append("text")
         .attr('transform', 'translate(-10,' + field_settings[fieldName].translate_label + ') rotate(-90)')
@@ -1152,95 +1167,37 @@ function update_pcaps_domain(newDomain, transition_bool) {
     // for each chart: select w/ new dataset, then exit/enter/update 
     // todo: tighten these functions
     state.to_plot.forEach(function(fieldName) {
-        if (field_settings[fieldName].value_type == 'number') {
-            // select
-            var points = d3.selectAll('.pcap_vs_' + fieldName).selectAll('.points_numbers')
-                .data(trimmed_data, function(d) {
-                    return d.pcap_secs
-                })
+        // select
+        var current = d3.select("." + fieldName + "_container")
+            .selectAll("." + fieldName + "_elements")
+            .data(trimmed_data, function(d) {
+                return d.pcap_secs
+            })
 
-            // exit
-            points.exit().remove();
+        // exit 
+        current.exit().remove()
 
-            // update
-            if (transition_bool) {
-                points.transition().duration(zoom_duration).attr('cx', scaled('pcap_secs'))
-            } else {
-                points.attr('cx', scaled('pcap_secs'))
-            }
-
-            // enter
-            enter_points(points, fieldName)
-
+        // update
+        if (transition_bool) {
+            current.transition().duration(zoom_duration).attr(field_settings[fieldName].x_metric, scaled('pcap_secs'));
+        } else {
+            current.attr(field_settings[fieldName].x_metric, scaled('pcap_secs'));
         }
 
-        if (field_settings[fieldName].value_type == 'stringbox') {
-            // select
-            var stringbox_boxes_current = d3.select("." + fieldName + "_boxes_" + fieldName)
-                .selectAll(".bool_boxes_" + fieldName)
-                .data(trimmed_data, function(d) {
-                    return d.pcap_secs
-                })
-
-            // exit 
-            stringbox_boxes_current.exit().remove()
-
-            // update
-            if (transition_bool) {
-                stringbox_boxes_current.transition().duration(zoom_duration).attr('x', scaled('pcap_secs'));
-            } else {
-                stringbox_boxes_current.attr('x', scaled('pcap_secs'));
-            }
-
-            // enter
-            enter_stringbox_boxes(stringbox_boxes_current, ordered_strings[fieldName], fieldName)
-
-        }
-
-        if (field_settings[fieldName].value_type == 'string') {
-            // select
-            var points = d3.selectAll('.pcap_vs_' + fieldName).selectAll('.points_strings')
-                .data(trimmed_data, function(d) {
-                    return d.pcap_secs
-                })
-
-            // exit
-            points.exit().remove();
-
-            // update
-            if (transition_bool) {
-                points.transition().duration(zoom_duration).attr('cx', scaled('pcap_secs'))
-            } else {
-                points.attr('cx', scaled('pcap_secs'))
-            }
-
-            // enter
-            enter_points_strings(points, ordered_strings[fieldName], fieldName)
-        }
-
+        // enter
         if (field_settings[fieldName].value_type == 'boolean') {
-            // select
-            var bool_boxes_current = d3.select(".boolean_boxes_" + fieldName)
-                .selectAll(".bool_boxes_rect_" + fieldName)
-                .data(trimmed_data, function(d) {
-                    return d.pcap_secs
-                })
-
-            // exit 
-            bool_boxes_current.exit().remove()
-
-            // update
-            if (transition_bool) {
-                bool_boxes_current.transition().duration(zoom_duration).attr('x', scaled('pcap_secs'));
-            } else {
-                bool_boxes_current.attr('x', scaled('pcap_secs'));
-            }
-
-            // enter
-            enter_boolean_boxes_by_dataset(fieldName, bool_boxes_current)
-
+            enter_boolean_boxes_by_dataset(fieldName, current)
+        } else if (field_settings[fieldName].value_type == 'stringbox') {
+            console.log(fieldName)
+            enter_stringbox_boxes(current, ordered_strings[fieldName], fieldName)
+        } else if (field_settings[fieldName].value_type == 'string') {
+            enter_points_strings(current, ordered_strings[fieldName], fieldName)
+        } else if (field_settings[fieldName].value_type == 'number') {
+            enter_points(current, fieldName)
         }
+
     })
+
 }
 
 // UPDATE HELPER FUNCTIONS
