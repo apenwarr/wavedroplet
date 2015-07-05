@@ -226,6 +226,7 @@ var ordered_arrays = {
     "streamId": [],
     "typestr": [],
     "retry_bad": ['bad', 'retry', 'good'],
+    "streamId_legend": [],
 }
 
 var addresses = {
@@ -292,8 +293,6 @@ d3.json('/json/' + decodeURIComponent(get_query_param('key')[0]), function(error
     draw();
 })
 
-var j;
-
 function init(json) {
     // TODO(katepek): Should sanitize here? E.g., discard bad packets?
     // Packets w/o seq?
@@ -327,7 +326,7 @@ function init(json) {
     var packetSecs = []
 
     // set up addresses w/ aliases
-    j = json.aliases
+    json.aliases
     for (var a in json.aliases) {
         addresses[a.replace(/:/gi, "")] = {
             "name": json.aliases[a]
@@ -337,10 +336,15 @@ function init(json) {
     // get user selection regarding "1D Ack"
     var show_ack = get_query_param('ack')[0];
 
-    dataset.forEach(function(d) {
+    dataset = dataset.filter(function(d) {
 
-        // check for 1D ACK and skip, if appropriate
-        if (show_ack == true || d.typestr != "1D ACK") {
+        //console.log(d.typestr, d.typestr == "1D ACK")
+        if (show_ack == "false" & d.typestr == "1D ACK") {
+            return false;
+        } else {
+
+            // check for 1D ACK and skip, if appropriate
+            //   if (show_ack == true || d.typestr != "1D ACK") {
 
             // replace ta/ra if packet is bad, or ta is null
             if (d.bad == 1) {
@@ -409,15 +413,18 @@ function init(json) {
                     values: [d]
                 };
                 ordered_arrays['streamId'].push(streamId);
+                ordered_arrays['streamId_legend'].push(streamId);
             } else {
                 stream2packetsDict[streamId].values.push(d);
             }
 
+            // dictionary sorted by time for faster scrollover (maybe?)
             if (!dict_by_ms[Math.floor(d.pcap_secs * 10)]) {
                 dict_by_ms[Math.floor(d.pcap_secs * 10)] = [d]
             } else {
                 dict_by_ms[Math.floor(d.pcap_secs * 10)].push(d)
             }
+            return true;
         }
     })
 
@@ -518,7 +525,7 @@ function draw() {
         visualize(d)
     })
 
-    //   add_legend();
+    add_legend();
 
     add_tooltip();
 }
@@ -653,7 +660,7 @@ function add_legend() {
     var legend_line_height = 24;
 
     // sort streams by number of packets per stream
-    ordered_arrays['streamId'].sort(function(a, b) {
+    ordered_arrays['streamId_legend'].sort(function(a, b) {
         return stream2packetsDict[b].values.length - stream2packetsDict[a].values.length
     })
 
@@ -857,7 +864,7 @@ function determine_selected_class(d) {
         return 'badpacket'
     } else if (!state.selected_data.stream || state.selected_data.stream == null) {
         return "";
-    } else if (stream2packetsDict[stream].direction == "upstream") {
+    } else if (stream2packetsDict[d.streamId].direction == "upstream") {
         if (state.selected_data.stream == d.streamId) {
             return 'selected_upstream';
         } else if (state.selected_data.access == d.ta && state.selected_data.station == d.ra) {
@@ -988,6 +995,8 @@ function draw_points(field, svg) {
 }
 
 function enter_points(svg, field) {
+    console.log(svg, field)
+
     svg.enter()
         .append('circle')
         .attr('class', function(d) {
