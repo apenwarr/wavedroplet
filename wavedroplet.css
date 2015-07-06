@@ -60,7 +60,6 @@
     .axis_string text {
       font-family: sans-serif;
       font-size: 10px;
-      fill: grey;
     }
 
     .axis_string.streamId text {
@@ -69,6 +68,10 @@
 
     .axis_string text:hover {
       font-size: 14px;
+    }
+
+    .selected_label {
+      fill: blue;
     }
 
     .focus {
