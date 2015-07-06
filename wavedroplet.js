@@ -329,8 +329,12 @@ function init(json) {
     // add fixed pcaps scale for header histogram nav chart
     state.scales['pcap_secs_fixed'] = d3.scale.linear().domain(state.scales['pcap_secs'].domain()).range(state.scales['pcap_secs'].range());
 
+    // for width
+    state.pixels_per_time = (x_range[1] - x_range[0]) / (state.scales['pcap_secs'].domain()[1] - state.scales['pcap_secs'].domain()[0])
+
     // use data to update pcap secs
     pcapSecsAxis.scale(state.scales['pcap_secs']);
+
 
     // define array of all packet seconds, for use with histogram
     var packetSecs = []
@@ -392,6 +396,9 @@ function init(json) {
                     "name": d.ra
                 }
             }
+
+            // calculate transmission time
+            d.elapsed = d.orig_len / (d.rate * 8);
 
             if (d.dsmode == 2) {
                 addresses[d.ta].type = "access";
@@ -820,25 +827,6 @@ function setup_crosshairs(field, svg) {
         .style('display', null);
 }
 
-function enter_stringbox_boxes(svg, field) {
-
-    svg.enter()
-        .append('rect')
-        .attr('x', scaled('pcap_secs'))
-        .attr('y', string_y(field, ordered_strings[field], field_settings[field].element_height))
-        .attr('width', 2)
-        .attr('height', function(d) {
-            if (determine_selected_class(d) == "" || determine_selected_class(d) == "badpacket") {
-                return dimensions.height.bar_height_unselected
-            } else {
-                return dimensions.height.bar_height_selected
-            }
-        })
-        .attr("class", function(d) {
-            return 'boxes ' + field + "_elements " + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d);
-        })
-}
-
 function enter_boxes(svg, field) {
 
     if (field_settings[field] == 'boolean') {
@@ -865,7 +853,7 @@ function enter_boxes(svg, field) {
         .append('rect')
         .attr('x', scaled('pcap_secs'))
         .attr('y', y_func)
-        .attr('width', 2)
+        .attr('width', box_width)
         .attr('height', function(d) {
             if (determine_selected_class(d) == "" || determine_selected_class(d) == "badpacket") {
                 return dimensions.height.bar_height_unselected
@@ -876,6 +864,10 @@ function enter_boxes(svg, field) {
         .attr("class", function(d) {
             return field + "_elements " + 'boxes' + " " + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d);
         })
+}
+
+var box_width = function(d) {
+    return Math.max(2, d.elapsed * state.pixels_per_time / 100000)
 }
 
 function determine_selected_class(d) {
@@ -1209,7 +1201,10 @@ function update_pcaps_domain(newDomain, transition_bool) {
 
     // set x-axis scale to new domain
     state.scales['pcap_secs'].domain(newDomain);
-    // update all x-axis with new scale (except overview)
+
+    // update pixels_per_time 
+    state.pixels_per_time = (state.scales['pcap_secs'].range()[1] - state.scales['pcap_secs'].range()[0]) / (newDomain[1] - newDomain[0])
+        // update all x-axis with new scale (except overview)
     d3.selectAll(".axis.x.metric").call(pcapSecsAxis);
 
     // trim dataset to just relevant time period
@@ -1235,9 +1230,9 @@ function update_pcaps_domain(newDomain, transition_bool) {
 
         // update
         if (transition_bool) {
-            current.transition().duration(zoom_duration).attr(field_settings[field].x_metric, scaled('pcap_secs'));
+            current.transition().duration(zoom_duration).attr(field_settings[field].x_metric, scaled('pcap_secs')).attr("width", box_width);
         } else {
-            current.attr(field_settings[field].x_metric, scaled('pcap_secs'));
+            current.attr(field_settings[field].x_metric, scaled('pcap_secs')).attr("width", box_width);
         }
 
         // enter
