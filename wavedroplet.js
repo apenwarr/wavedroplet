@@ -216,6 +216,7 @@ var state = {
         func: "",
         "field": 0,
         "value": 0,
+        "filteredData": []
     }
 }
 
@@ -1122,6 +1123,7 @@ function filterDataAccessPoint() {
             state.filter.func = "";
             state.filter.value = null;
             state.filter.field = null;
+            state.filter.filteredData = dataset;
             d3.selectAll('.labels_streamId').classed("selected_label", false)
 
         } else {
@@ -1136,6 +1138,7 @@ function filterDataAccessPoint() {
                     return false;
                 }
             };
+            state.filter.filteredData = dataset.filter(state.filter.func)
         }
 
         update_pcaps_domain(state.scales['pcap_secs'].domain(), false);
@@ -1149,6 +1152,7 @@ function filterData(field) {
             state.filter.func = "";
             state.filter.value = null;
             state.filter.field = null;
+            state.filter.filteredData = dataset;
             d3.selectAll(".labels_" + field).classed("selected_label", false)
 
         } else {
@@ -1161,6 +1165,7 @@ function filterData(field) {
                     return false;
                 }
             };
+            state.filter.filteredData = dataset.filter(state.filter.func)
             d3.selectAll(".selected_label").classed("selected_label", false)
             d3.select(this).classed("selected_label", true)
         }
@@ -1195,7 +1200,7 @@ function update_pcaps_domain(newDomain, transition_bool) {
 
     // trim dataset to just relevant time period
     if (state.filter.func != "") {
-        var trimmed_data = trim_by_pcap_secs(dataset.filter(state.filter.func));
+        var trimmed_data = trim_by_pcap_secs(state.filter.filteredData);
     } else {
         var trimmed_data = trim_by_pcap_secs(dataset);
     }
@@ -1437,13 +1442,14 @@ function find_packet(x, y, field, lock) {
         if (state.filter.func == "") {
             var search_in = stream2packetsDict[state.selected_data.stream].values;
         } else {
+            // todo: this might be really slow
             var search_in = stream2packetsDict[state.selected_data.stream].values.filter(state.filter.func);
         }
     } else if (state.filter.func == "") {
         // search in closest 100ms of data points
         var search_in = dict_by_ms[Math.floor(pcap_secs * 10)];
     } else {
-        var search_in = dict_by_ms[Math.floor(pcap_secs * 10)].filter(state.filter.func)
+        var search_in = state.filter.filteredData;
     }
 
     var idx = binary_search_by_pcap_secs(search_in, pcap_secs, 0);
