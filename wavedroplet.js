@@ -204,6 +204,18 @@ var state = {
         access: null,
         station: null,
         //   direction: null,
+    },
+    /* If you type in the console: 
+            state.filter.func = function(d){if(d["typestr"] == "04 ProbeReq"){return true} else {return false}}"
+            update_pcaps_domain(state.scales['pcap_secs'].domain(), false)
+       you can filter the displayed points to any particular subset you want (in this case, typestr that equal "04 ProbeReq")
+
+       Note that this does not affect the cross-filter which will adjust to any dataset
+    */
+    filter: {
+        func: "",
+        "field": 0,
+        "value": 0,
     }
 }
 
@@ -226,6 +238,7 @@ var ordered_arrays = {
     "streamId": [],
     "typestr": [],
     "retry_bad": ['bad', 'retry', 'good'],
+    "streamId_legend": [],
 }
 
 var addresses = {
@@ -292,8 +305,6 @@ d3.json('/json/' + decodeURIComponent(get_query_param('key')[0]), function(error
     draw();
 })
 
-var j;
-
 function init(json) {
     // TODO(katepek): Should sanitize here? E.g., discard bad packets?
     // Packets w/o seq?
@@ -327,7 +338,7 @@ function init(json) {
     var packetSecs = []
 
     // set up addresses w/ aliases
-    j = json.aliases
+    json.aliases
     for (var a in json.aliases) {
         addresses[a.replace(/:/gi, "")] = {
             "name": json.aliases[a]
@@ -337,10 +348,12 @@ function init(json) {
     // get user selection regarding "1D Ack"
     var show_ack = get_query_param('ack')[0];
 
-    dataset.forEach(function(d) {
+    dataset = dataset.filter(function(d) {
 
-        // check for 1D ACK and skip, if appropriate
-        if (show_ack == true || d.typestr != "1D ACK") {
+        //console.log(d.typestr, d.typestr == "1D ACK")
+        if (show_ack == "false" & d.typestr == "1D ACK") {
+            return false;
+        } else {
 
             // replace ta/ra if packet is bad, or ta is null
             if (d.bad == 1) {
@@ -409,15 +422,18 @@ function init(json) {
                     values: [d]
                 };
                 ordered_arrays['streamId'].push(streamId);
+                ordered_arrays['streamId_legend'].push(streamId);
             } else {
                 stream2packetsDict[streamId].values.push(d);
             }
 
+            // dictionary sorted by time for faster scrollover (maybe?)
             if (!dict_by_ms[Math.floor(d.pcap_secs * 10)]) {
                 dict_by_ms[Math.floor(d.pcap_secs * 10)] = [d]
             } else {
                 dict_by_ms[Math.floor(d.pcap_secs * 10)].push(d)
             }
+            return true;
         }
     })
 
@@ -518,7 +534,7 @@ function draw() {
         visualize(d)
     })
 
-    //   add_legend();
+    add_legend();
 
     add_tooltip();
 }
@@ -653,7 +669,7 @@ function add_legend() {
     var legend_line_height = 24;
 
     // sort streams by number of packets per stream
-    ordered_arrays['streamId'].sort(function(a, b) {
+    ordered_arrays['streamId_legend'].sort(function(a, b) {
         return stream2packetsDict[b].values.length - stream2packetsDict[a].values.length
     })
 
@@ -800,12 +816,12 @@ function setup_crosshairs(field, svg) {
         .style('display', null);
 }
 
-function enter_stringbox_boxes(svg, string_list, field) {
+function enter_stringbox_boxes(svg, field) {
 
     svg.enter()
         .append('rect')
         .attr('x', scaled('pcap_secs'))
-        .attr('y', string_y(field, string_list, field_settings[field].element_height))
+        .attr('y', string_y(field, ordered_strings[field], field_settings[field].element_height))
         .attr('width', 2)
         .attr('height', function(d) {
             if (determine_selected_class(d) == "" || determine_selected_class(d) == "badpacket") {
@@ -819,12 +835,10 @@ function enter_stringbox_boxes(svg, string_list, field) {
         })
 }
 
-function enter_boolean_boxes_by_dataset(field, svg) {
+function enter_boxes(svg, field) {
 
-    svg.enter()
-        .append('rect')
-        .attr('x', scaled('pcap_secs'))
-        .attr('y', function(d) {
+    if (field_settings[field] == 'boolean') {
+        var y_func = function(d) {
             if (field != 'spatialstreams') {
                 if (d[field] == 1) {
                     return 0
@@ -838,7 +852,15 @@ function enter_boolean_boxes_by_dataset(field, svg) {
                     return dimensions.height.bar_height_selected + 4
                 }
             }
-        })
+        }
+    } else {
+        var y_func = string_y(field, ordered_strings[field], field_settings[field].element_height);
+    }
+
+    svg.enter()
+        .append('rect')
+        .attr('x', scaled('pcap_secs'))
+        .attr('y', y_func)
         .attr('width', 2)
         .attr('height', function(d) {
             if (determine_selected_class(d) == "" || determine_selected_class(d) == "badpacket") {
@@ -857,7 +879,7 @@ function determine_selected_class(d) {
         return 'badpacket'
     } else if (!state.selected_data.stream || state.selected_data.stream == null) {
         return "";
-    } else if (stream2packetsDict[stream].direction == "upstream") {
+    } else if (stream2packetsDict[d.streamId].direction == "upstream") {
         if (state.selected_data.stream == d.streamId) {
             return 'selected_upstream';
         } else if (state.selected_data.access == d.ta && state.selected_data.station == d.ra) {
@@ -898,7 +920,7 @@ function settings_boolean(field, svg) {
     // set up type specific metrics
     field_settings[field].x_metric = "x";
     field_settings[field].enter_elements = function(current, field) {
-        return enter_boolean_boxes_by_dataset(field, current)
+        return enter_boxes(current, field)
     };
     field_settings[field].element_type = "box"
     field_settings[field].y_axis_setup = function(svg, field) {
@@ -912,7 +934,7 @@ function settings_stringbox(field, svg) {
     // update field settings appropriate for field type stringbox
     field_settings[field].x_metric = "x"
     field_settings[field].enter_elements = function(current, field) {
-        return enter_stringbox_boxes(current, ordered_strings[field], field)
+        return enter_boxes(current, field)
     }
     field_settings[field].chart_height = (ordered_arrays[field].length) * field_settings[field].element_height;
     field_settings[field].element_type = "box"
@@ -925,7 +947,7 @@ function settings_stringbox(field, svg) {
 function settings_strings(field, svg) {
     field_settings[field].x_metric = "cx"
     field_settings[field].enter_elements = function(current, field) {
-        return enter_points_strings(current, ordered_strings[field], field)
+        return enter_points(current, field, ordered_strings[field])
     }
     field_settings[field].element_type = "point"
 
@@ -980,36 +1002,19 @@ function draw_rect_for_zooming(svg, height) {
         .attr("class", "drag_rect hidden")
 }
 
-function draw_points(field, svg) {
-    enter_points(
-        svg,
-        field)
-
-}
-
 function enter_points(svg, field) {
-    svg.enter()
-        .append('circle')
-        .attr('class', function(d) {
-            return field + '_elements' + " points " + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d)
-        })
-        .attr('cx', scaled('pcap_secs'))
-        .attr('cy', scaled(field))
-        .attr('r', 1.5);
-}
+    var cy_func = scaled(field);
+    if (field_settings[field].value_type == 'string') {
+        cy_func = string_y(field, ordered_strings[field], field_settings[field].element_height)
+    }
 
-function draw_points_strings(field, svg, string_list) {
-    enter_points_strings(svg, string_list, field)
-}
-
-function enter_points_strings(svg, string_list, field) {
     svg.enter()
         .append('circle')
         .attr('class', function(d) {
             return field + '_elements ' + ' points ' + ' ta_' + d.ta + ' ra_' + d.ra + ' stream_' + d.streamId + " " + determine_selected_class(d)
         })
         .attr('cx', scaled('pcap_secs'))
-        .attr('cy', string_y(field, string_list, field_settings[field].element_height))
+        .attr('cy', cy_func)
         .attr('r', 1.5);
 }
 
@@ -1067,7 +1072,9 @@ function draw_string_y_axis_streamId(svg, field) {
             return (currentSum + .5) * line_height;
             // return (i + .5) * line_height
         })
-        .attr("class", '.labels_' + field)
+        .attr("fill", "grey")
+        .attr("class", 'labels_' + field)
+        .on("click", filterDataAccessPoint())
         .text(function(d) {
             return addresses[d].name
         })
@@ -1095,7 +1102,9 @@ function draw_string_y_axis(svg, field) {
         .attr("y", function(d, i) {
             return (i + .5) * line_height
         })
-        .attr("class", '.labels_' + field)
+        .attr("fill", "grey")
+        .attr("class", 'labels_' + field)
+        .on("click", filterData(field))
         .text(function(d) {
             if (field == 'streamId') {
                 return to_visible_stream_key(d)
@@ -1104,6 +1113,61 @@ function draw_string_y_axis(svg, field) {
             }
         })
 }
+
+
+function filterDataAccessPoint() {
+    return function(d) {
+        console.log(d)
+        if (state.filter.value == d) {
+            state.filter.func = "";
+            state.filter.value = null;
+            state.filter.field = null;
+            d3.selectAll('.labels_streamId').classed("selected_label", false)
+
+        } else {
+            d3.selectAll('.selected_label').classed("selected_label", false)
+            d3.select(this).classed("selected_label", true)
+            state.filter.value = d;
+            state.filter.field = "access_point";
+            state.filter.func = function(k) {
+                if (k.ta == d || k.ra == d) {
+                    return true;
+                } else {
+                    return false;
+                }
+            };
+        }
+
+        update_pcaps_domain(state.scales['pcap_secs'].domain(), false);
+    }
+}
+
+
+function filterData(field) {
+    return function(d) {
+        if (state.filter.value == d) {
+            state.filter.func = "";
+            state.filter.value = null;
+            state.filter.field = null;
+            d3.selectAll(".labels_" + field).classed("selected_label", false)
+
+        } else {
+            state.filter.value = d;
+            state.filter.field = field;
+            state.filter.func = function(k) {
+                if (k[field] == d) {
+                    return true;
+                } else {
+                    return false;
+                }
+            };
+            d3.selectAll(".selected_label").classed("selected_label", false)
+            d3.select(this).classed("selected_label", true)
+        }
+        update_pcaps_domain(state.scales['pcap_secs'].domain(), false);
+    }
+}
+
 
 
 function draw_metric_x_axis(svg, field) {
@@ -1130,7 +1194,11 @@ function update_pcaps_domain(newDomain, transition_bool) {
     d3.selectAll(".axis.x.metric").call(pcapSecsAxis);
 
     // trim dataset to just relevant time period
-    var trimmed_data = trim_by_pcap_secs(dataset);
+    if (state.filter.func != "") {
+        var trimmed_data = trim_by_pcap_secs(dataset.filter(state.filter.func));
+    } else {
+        var trimmed_data = trim_by_pcap_secs(dataset);
+    }
 
     // for each chart: select w/ new dataset, then exit/enter/update 
     // todo: tighten these functions
@@ -1364,11 +1432,18 @@ function find_packet(x, y, field, lock) {
 
     var pcap_secs = state.scales['pcap_secs'].invert(x);
 
-    // search in closest 100ms of data points
-    var search_in = dict_by_ms[Math.floor(pcap_secs * 10)];
 
     if (state.selected_data.stream && lock) {
-        search_in = stream2packetsDict[state.selected_data.stream].values;
+        if (state.filter.func == "") {
+            var search_in = stream2packetsDict[state.selected_data.stream].values;
+        } else {
+            var search_in = stream2packetsDict[state.selected_data.stream].values.filter(state.filter.func);
+        }
+    } else if (state.filter.func == "") {
+        // search in closest 100ms of data points
+        var search_in = dict_by_ms[Math.floor(pcap_secs * 10)];
+    } else {
+        var search_in = dict_by_ms[Math.floor(pcap_secs * 10)].filter(state.filter.func)
     }
 
     var idx = binary_search_by_pcap_secs(search_in, pcap_secs, 0);
