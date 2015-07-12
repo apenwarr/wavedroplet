@@ -1,7 +1,7 @@
 "use strict";
 
 /*
-Possible Next Steps: 
+Possible Next Steps:
 
 Switch to Canvas for all but overview chart: faster than SVG, major advantage of SVG is selecting elements but we're not using that feature because of doing binary search instead to find closest point
       * alternatively, switch to voronoi to manage selecting nearest point: http://bl.ocks.org/mbostock/8033015, or just use points themselves?
@@ -14,7 +14,7 @@ Identify streams with numbers instead of strings to speed up code, dictionary fo
 
 Zooming sometimes buggy
 
-Make everything faster!  
+Make everything faster!
 */
 
 // debugging
@@ -26,7 +26,7 @@ function log(o) {
     }
 }
 
-// find visible width/height 
+// find visible width/height
 var w = window,
     d = document,
     e = d.documentElement,
@@ -177,7 +177,7 @@ var field_settings = {
     }
 }
 
-// complete selectable metrics 
+// complete selectable metrics
 for (var i in selectableMetrics) {
     if (!field_settings[selectableMetrics[i]]) {
         field_settings[selectableMetrics[i]] = {
@@ -190,7 +190,7 @@ for (var i in selectableMetrics) {
     }
 }
 
-// GLOBAL VARIABLES 
+// GLOBAL VARIABLES
 
 // TODO: better handling of variables, less reliance on global variables
 
@@ -205,7 +205,7 @@ var state = {
         station: null,
         //   direction: null,
     },
-    /* If you type in the console: 
+    /* If you type in the console:
             state.filter.func = function(d){if(d["typestr"] == "04 ProbeReq"){return true} else {return false}}"
             update_pcaps_domain(state.scales['pcap_secs'].domain(), false)
        you can filter the displayed points to any particular subset you want (in this case, typestr that equal "04 ProbeReq")
@@ -303,7 +303,7 @@ d3.json('/json/' + decodeURIComponent(get_query_param('key')[0]), function(error
     // update title
     document.getElementById("title").innerHTML = json.filename;
 
-    // set up 
+    // set up
     init(json);
 
     // visualize
@@ -391,7 +391,7 @@ function init(json) {
             d.ra = d.ra.replace(/:/gi, "")
 
             // use dsmode from each packet to define addresses as access or stations, use later to define streams as downstream/upstream
-            // Logic: if dsmode = 2, then assign as downstream. If dsmode == 1, then assign as upstream. If dsmode 
+            // Logic: if dsmode = 2, then assign as downstream. If dsmode == 1, then assign as upstream. If dsmode
             // question: better to check if type exists, or overwrite as I'm doing here?
 
             if (!addresses[d.ra]) {
@@ -1220,7 +1220,7 @@ function update_pcaps_domain(newDomain, transition_bool) {
         var trimmed_data = trim_by_pcap_secs(dataset);
     }
 
-    // for each chart: select w/ new dataset, then exit/enter/update 
+    // for each chart: select w/ new dataset, then exit/enter/update
     // todo: tighten these functions
     state.to_plot.forEach(function(field) {
 
@@ -1231,7 +1231,7 @@ function update_pcaps_domain(newDomain, transition_bool) {
                 return d.pcap_secs
             })
 
-        // exit 
+        // exit
         current.exit().remove()
 
         // update
@@ -1374,7 +1374,7 @@ function end_drag(positive_diff, mouse_start, mouse_x) {
         ];
     }
 
-    // use new domain to update 
+    // use new domain to update
     state.scales['pcap_secs'].domain(newDomain)
     brush.extent(newDomain)
     d3.selectAll(".brush").call(brush)
