@@ -288,7 +288,11 @@ var binary_search_by_pcap_secs =
 // helper function for scales
 function scaled(name) {
     return function(d) {
-        return state.scales[name](d[name]);
+        if (!d) {
+            return d;
+        } else {
+            return state.scales[name](d[name]);
+        }
     }
 }
 
@@ -945,6 +949,11 @@ function settings_stringbox(field, svg) {
 }
 
 
+function cmp(a, b) {
+    return (a || '').localeCompare(b || '');
+}
+
+
 function settings_strings(field, svg) {
     field_settings[field].x_metric = "cx"
     field_settings[field].enter_elements = function(current, field) {
@@ -955,10 +964,12 @@ function settings_strings(field, svg) {
     if (field == 'streamId') {
         // sort by AP mac address, then by station mac address
         ordered_arrays.streamId.sort(function(a, b) {
-            if (stream2packetsDict[a].access != stream2packetsDict[b].access) {
-                return stream2packetsDict[a].access.localeCompare(stream2packetsDict[b].access);
+            var pa = stream2packetsDict[a];
+            var pb = stream2packetsDict[b];
+            if (pa.access != pb.access) {
+                return cmp(pa.access, pb.access);
             } else {
-                return stream2packetsDict[a].station.localeCompare(stream2packetsDict[b].station);
+                return cmp(pa.station, pb.station);
             }
         })
 
@@ -1047,11 +1058,15 @@ function draw_string_y_axis_streamId(svg, field) {
     var line_height = field_settings[field].element_height;
 
     ordered_arrays[field].forEach(function(d) {
-        if (!addresses[stream2packetsDict[d].access].num_streams) {
-            addresses[stream2packetsDict[d].access].num_streams = 1;
-            access_point_list.push(stream2packetsDict[d].access)
+        var access = stream2packetsDict[d].access;
+        if (!addresses[access]) {
+            addresses[access] = {};
+        }
+        if (!addresses[access].num_streams) {
+            addresses[access].num_streams = 1;
+            access_point_list.push(access)
         } else {
-            addresses[stream2packetsDict[d].access].num_streams++
+            addresses[access].num_streams++;
         }
     })
 
