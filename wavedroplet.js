@@ -63,24 +63,17 @@ var dimensions = {
 }
 
 // metric lists
-var availableMetrics = [
-    "ta",
-    "ra",
+var tooltipMetrics = [
+    "streamId",
+    "pcap_secs",
     "typestr",
     "seq",
     "rate",
     "orig_len",
-    "pcap_secs",
-    "mac_usecs",
-    "streamId",
-    "antenna",
-    "dbm_antnoise",
     "dbm_antsignal",
-    "dsmode",
-    "duration",
+    "dbm_antnoise",
     "powerman",
     "retry",
-    "mcs"
 ];
 
 var selectableMetrics = [
@@ -727,9 +720,9 @@ function add_tooltip() {
         .classed('hidden', true)
         .append("svg")
         .attr("width", 180)
-        .attr("height", availableMetrics.length * dimensions.height.tooltip)
+        .attr("height", tooltipMetrics.length * dimensions.height.tooltip)
         .selectAll('.tooltipValues')
-        .data(availableMetrics)
+        .data(tooltipMetrics)
         .enter()
         .append("text")
         .attr("class", "tooltipValues")
@@ -745,14 +738,20 @@ function update_show_Tooltip(data, location) {
         .style('top', (location[1] + 20) + "px")
         .classed('hidden', false)
         .selectAll(".tooltipValues")
-        .data(availableMetrics)
+        .data(tooltipMetrics)
         .text(function(k) {
             if (k == "streamId") {
-                return k + ": " + to_visible_stream_key(data[k]);
+                return to_visible_stream_key(data[k]);
             }
             if (k == "ta" || k == "ra") {
                 return k + ": " + addresses[data[k]].name
             }
+	    if (k == "pcap_secs") {
+		return milliseconds(data[k]);
+	    }
+	    if (k == "typestr") {
+		return data[k];
+	    }
             return k + ": " + data[k]
         });
 }
@@ -1629,5 +1628,5 @@ function hourMinuteMilliseconds(d) {
 }
 
 function milliseconds(d) {
-    return d3.time.format("%Ss %Lms")(new Date(d * 1000))
+    return d3.time.format("%H:%M:%S.%L")(new Date(d * 1000))
 }
