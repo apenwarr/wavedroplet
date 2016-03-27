@@ -446,6 +446,7 @@ def Example(p):
             src, opt.dsmode, opt.typestr, ts,
             opt.rate, opt.get('mcs'), opt.get('spatialstreams'),
             mac_usecs, opt.orig_len, seq, opt.get('flags'))
+      sys.stdout.flush()
 
 
 def ZOpen(fn):
