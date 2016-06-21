@@ -10,6 +10,9 @@ import wifipacket
 
 ASCII_ART = ' .:-=+*#%@'
 
+pcount = None
+stations = None
+
 
 class StationData(object):
   def __init__(self):
@@ -41,25 +44,65 @@ def RateArt(bins):
   return ''.join(out)
 
 
+def _GotPacket(opt, frame):
+  global pcount
+  pcount += 1
+  if opt.typestr[0] != '1':
+    if opt.dsmode == 2:
+      down = True
+      ap_mac, sta_mac = opt.get('ta', None), opt.get('ra', None)
+    elif opt.dsmode == 1:
+      down = False
+      sta_mac, ap_mac = opt.get('ta', None), opt.get('ra', None)
+    else:
+      # dsmode 0 might be either AP or STA; ignore for now.
+      return
+    if sta_mac and (int(sta_mac[0:2], 16) & 1):
+      sta_mac = 'MCAST'
+    if opt.bad and not ap_mac in stations:
+      return
+    ap_arr = stations[ap_mac]
+    ap = ap_arr[None]
+    if opt.bad and sta_mac not in ap_arr:
+      return
+    sta = ap_arr[sta_mac]
+    if opt.typestr[0] == '2':  # only care about data rates
+      rate_bin = min(opt.get('mcs', 0), 9) # min(90, int(opt.get('rate', 0) / 10) * 10)
+      if down:
+        ap.packets_tx[rate_bin] += 1
+        sta.packets_rx[rate_bin] += 1
+      else:
+        ap.packets_rx[rate_bin] += 1
+        sta.packets_tx[rate_bin] += 1
+    sta.last_type = opt.typestr
+    if 'dbm_antsignal' in opt:
+      if down:
+        ap.rssi[opt.dbm_antsignal] += 1
+      else:
+        sta.rssi[opt.dbm_antsignal] += 1
+    if down and opt.typestr == '08 Beacon':
+      ap.is_ap = True
+
+
 def main(win):
+  global stations, pcount
+  pcount = 0
   stations = collections.defaultdict(lambda: collections.defaultdict(StationData))
   p = subprocess.Popen(['tcpdump', '-Ilni', 'en0', '-w', '-'],
                        stdout=subprocess.PIPE, stderr=open('/dev/null', 'w'))
   stream = os.dup(p.stdout.fileno())
-  packets = wifipacket.Packetize(os.fdopen(stream, 'r', 0))
-  packeti = iter(packets)
-  pcount = 0
-  next_timeout = 0
+  #stream = os.open('foo.pcap', os.O_RDONLY)
+
+  packetizer = wifipacket.Packetizer(_GotPacket)
   last_update = 0
   while 1:
-    #if next_timeout:   # FIXME broken
     now = time.time()
-    if now - last_update > 0.5:
+    if now - last_update > 0.1:
       rows, cols = win.getmaxyx()
       last_update = now
       win.move(0, 0)
       win.addstr('%-20s %5s %6s %-10s %6s %-10s %s\n' %
-                 ('%d pkts, nto=%d' % (pcount, next_timeout),
+                 ('%d pkts' % (pcount,),
                   'RSSI', 'Up', '', 'Down', '', 'Type'))
       n = -1
       for ap_mac, ap_arr in sorted(stations.iteritems(),
@@ -80,49 +123,16 @@ def main(win):
                   '' if is_ap else RateArt(stats.packets_rx),
                   stats.last_type))
           win.addstr('%s\n' % row[:cols-1])
+      win.move(0, 0)
       win.refresh()
-    r, w, x = select.select([stream], [], [], next_timeout)
-    if r:
-      opt, frame = next(packeti)
-      pcount += 1
-      if opt.typestr[0] != '1':
-        if opt.dsmode == 2:
-          down = True
-          ap_mac, sta_mac = opt.get('ta', None), opt.get('ra', None)
-        elif opt.dsmode == 1:
-          down = False
-          sta_mac, ap_mac = opt.get('ta', None), opt.get('ra', None)
-        else:
-          # dsmode 0 might be either AP or STA; ignore for now.
-          continue
-        if sta_mac and (int(sta_mac[0:2], 16) & 1):
-          sta_mac = 'MCAST'
-        if opt.bad and not ap_mac in stations:
-          continue
-        ap_arr = stations[ap_mac]
-        ap = ap_arr[None]
-        if opt.bad and sta_mac not in ap_arr:
-          continue
-        sta = ap_arr[sta_mac]
-        if opt.typestr[0] == '2':  # only care about data rates
-          rate_bin = min(opt.get('mcs', 0), 9) # min(90, int(opt.get('rate', 0) / 10) * 10)
-          if down:
-            ap.packets_tx[rate_bin] += 1
-            sta.packets_rx[rate_bin] += 1
-          else:
-            ap.packets_rx[rate_bin] += 1
-            sta.packets_tx[rate_bin] += 1
-        sta.last_type = opt.typestr
-        if 'dbm_antsignal' in opt:
-          if down:
-            ap.rssi[opt.dbm_antsignal] += 1
-          else:
-            sta.rssi[opt.dbm_antsignal] += 1
-        if down and opt.typestr == '08 Beacon':
-          ap.is_ap = True
-      next_timeout = 0
-    else:
-      next_timeout = 0.1
+    r, w, x = select.select([stream], [], [], 0.1)
+    if stream in r:
+      b = os.read(stream, 65536)
+      if b:
+        packetizer.Handle(b)
+      else:
+        # EOF
+        break
 
 
 if __name__ == '__main__':

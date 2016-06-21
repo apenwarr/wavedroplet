@@ -402,16 +402,35 @@ def Packetize(stream, iter_timeout=None):
   while 1:
     while 1:
       result = next(it)
-      if result is None:
+      if result:
+        yield result
+      else:
         # not enough data in buffer
         break
-      yield result
-    if select.select([stream], [], [], iter_timeout):
-      b = stream.read(4096)
-      if not b:
-        # EOF
+    b = stream.read(4096)
+    if not b:
+      # EOF
+      break
+    buf.Put(b)
+
+
+class Packetizer(object):
+
+  def __init__(self, callback):
+    self.buf = mybuf.Buf()
+    self.callback = callback
+    self.it = PacketizeBuf(self.buf)
+
+  def Handle(self, newbytes):
+    self.buf.Put(newbytes)
+    while 1:
+      result = next(self.it)
+      if result:
+        opt, frame = result
+        self.callback(opt, frame)
+      else:
+        # not enough data in buffer
         break
-      buf.Put(b)
 
 
 def Example(p):
