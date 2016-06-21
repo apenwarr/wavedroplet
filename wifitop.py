@@ -8,45 +8,59 @@ import time
 import wifipacket
 
 
-ASCII_ART = ' .:-=+*#%@'
+RATE_BIN_MAX = 9
+RATE_BIN_SHOW_MAX = 7
+
 
 pcount = None
+badcount = None
 stations = None
 
 
 class StationData(object):
   def __init__(self):
-    self.packets_tx = collections.defaultdict(int)
-    self.packets_rx = collections.defaultdict(int)
-    self.bytes_tx = collections.defaultdict(int)
-    self.bytes_rx = collections.defaultdict(int)
+    self.packets_tx = [0] * (RATE_BIN_MAX + 1)
+    self.packets_rx = [0] * (RATE_BIN_MAX + 1)
     self.rssi = collections.defaultdict(int)
     self.last_type = ''
     self.is_ap = False
 
 
-def RateArt(bins):
-  total = sum(bins.values()) + 1
-  if bins:
-    most = max(max(bins.values()), 1)
-  else:
-    most = -1
+def RateArt(bins, maxbin):
+  # To keep the column length smaller, we treat all bins >= maxbin as
+  # one big "meh, fast enough" bin.  But we still report the exact bin was
+  # the largest in that group.
+  fixbins = bins[:maxbin] + [sum(bins[maxbin:])]
+  mosti = 0
+  most = 1
+  for i, v in enumerate(fixbins):
+    if v >= most:
+      mosti = i
+      most = v
   out = []
-  for i in range(10): # range(0, 100, 10):
-    #out.append(ASCII_ART[min(9, 10 * bins[i] / total)])
-    v = bins[i]
-    if v == most:
-      out.append(str(i))#'*')
-    elif v > 0:
-      out.append('.')
+  for i, v in enumerate(fixbins):
+    if not v:
+      c = ' '
+    elif v >= most:
+      if i == maxbin:
+        if mosti < i:
+          raise AssertionError('mosti(%d) < i(%d) in %r' % (mosti, i, bins))
+        c = str(mosti)
+      else:
+        c = str(i)
+    elif v > most / 20:
+      c = '*'
     else:
-      out.append(' ')
+      c = '.'
+    out.append(c)
   return ''.join(out)
 
 
 def _GotPacket(opt, frame):
-  global pcount
+  global pcount, badcount
   pcount += 1
+  if opt.bad:
+    badcount += 1
   if opt.typestr[0] != '1':
     if opt.dsmode == 2:
       down = True
@@ -67,7 +81,7 @@ def _GotPacket(opt, frame):
       return
     sta = ap_arr[sta_mac]
     if opt.typestr[0] == '2':  # only care about data rates
-      rate_bin = min(opt.get('mcs', 0), 9) # min(90, int(opt.get('rate', 0) / 10) * 10)
+      rate_bin = min(opt.get('mcs', 0), RATE_BIN_MAX)
       if down:
         ap.packets_tx[rate_bin] += 1
         sta.packets_rx[rate_bin] += 1
@@ -85,8 +99,8 @@ def _GotPacket(opt, frame):
 
 
 def main(win):
-  global stations, pcount
-  pcount = 0
+  global stations, pcount, badcount
+  pcount = badcount = 0
   stations = collections.defaultdict(lambda: collections.defaultdict(StationData))
   p = subprocess.Popen(['tcpdump', '-Ilni', 'en0', '-w', '-'],
                        stdout=subprocess.PIPE, stderr=open('/dev/null', 'w'))
@@ -101,28 +115,30 @@ def main(win):
       rows, cols = win.getmaxyx()
       last_update = now
       win.move(0, 0)
-      win.addstr('%-20s %5s %6s %-10s %6s %-10s %s\n' %
-                 ('%d pkts' % (pcount,),
-                  'RSSI', 'Up', '', 'Down', '', 'Type'))
+      win.addstr('%-20.20s %4s %6s %8s %6s %8s %s' %
+                 ('%d pkt, %d bad' % (pcount, badcount),
+                  'RSSI', 'Up', '-----MCS', 'Down', '-----MCS', 'Type'))
       n = -1
       for ap_mac, ap_arr in sorted(stations.iteritems(),
-                                   key = lambda (mac,aa): -sum(aa[None].packets_tx.values())-sum(aa[None].packets_rx.values())):
+                                   key = lambda (mac,aa): -sum(aa[None].packets_tx)-sum(aa[None].packets_rx)):
         for sta_mac, stats in sorted(ap_arr.iteritems(),
-                                     key=lambda (mac,st): -sum(st.packets_tx.values())-sum(st.packets_rx.values())):
+                                     key=lambda (mac,st): -sum(st.packets_tx)-sum(st.packets_rx)):
           n += 1
-          if n >= rows - 2:
+          if n >= rows - 1:
             break
           rssi_avg = sum(rssi*count for (rssi, count) in stats.rssi.iteritems()) / (1+sum(count for (rssi, count) in stats.rssi.iteritems()))
           is_ap = 0 if sta_mac else 1
-          row = ('%-20s %5s %6d %10s %6d %10s %s' %
+          down_packets = stats.packets_tx if is_ap else stats.packets_rx
+          up_packets = stats.packets_rx if is_ap else stats.packets_tx
+          row = ('%-20s %4s %6d %-8s %6d %-8s %s' %
                  ('   ' + sta_mac if sta_mac else 'AP ' + ap_mac,
-                  ('%ddB' % rssi_avg) if rssi_avg else '',
-                  sum(stats.packets_tx.values()),
-                  '' if is_ap else RateArt(stats.packets_tx),
-                  sum(stats.packets_rx.values()),
-                  '' if is_ap else RateArt(stats.packets_rx),
+                  ('%d' % rssi_avg) if rssi_avg else '',
+                  sum(up_packets),
+                  RateArt(up_packets, RATE_BIN_SHOW_MAX),
+                  sum(down_packets),
+                  RateArt(down_packets, RATE_BIN_SHOW_MAX),
                   stats.last_type))
-          win.addstr('%s\n' % row[:cols-1])
+          win.addstr('\n%s' % row[:cols-1])
       win.move(0, 0)
       win.refresh()
     r, w, x = select.select([stream], [], [], 0.1)
