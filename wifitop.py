@@ -7,6 +7,7 @@ import select
 import subprocess
 import sys
 import time
+import ieee_oui
 import wifipacket
 
 
@@ -17,6 +18,79 @@ RATE_BIN_SHOW_MAX = 7
 pcount = None
 badcount = None
 stations = None
+oui = None
+aliases = None
+
+
+class Aliases(object):
+  def __init__(self, filename):
+    self.filename = filename
+    self.file_time = 0
+    self.dirty = False
+    self.orig_lookup = {}
+    self.lookup = {}
+    self.Load()
+
+  def Load(self):
+    try:
+      mtime = os.stat(self.filename).st_mtime
+    except OSError:
+      return  # no file, nothing to do
+    if mtime == self.file_time:
+      return  # file unchanged, nothing to do
+
+    new_lookup = {}
+    f = open(self.filename)
+    for line in f:
+      t = line.split()[:2]
+      if len(t) > 1:
+        macaddr, alias = t[:2]
+        new_lookup[macaddr.lower()] = alias
+
+    # apply deletions from old to new
+    deleted = set(self.orig_lookup.keys()) - set(new_lookup.keys())
+    for k in deleted:
+      try:
+        del self.lookup[k]
+      except KeyError:
+        pass
+
+    # apply changes/additions from old to new
+    changed = set(new_lookup.items()) - set(self.orig_lookup.items())
+    for k, v in changed:
+      self.lookup[k] = v
+
+    self.file_time = mtime
+
+  def Save(self):
+    if self.dirty:
+      self.Load()  # first merge in other people's changes
+      f = open(self.filename + '.tmp', 'w')
+      for macaddr, alias in sorted(self.lookup.iteritems()):
+        f.write('%s %s\n' % (macaddr, alias))
+      self.file_time = os.fstat(f.fileno()).st_mtime
+      self.orig_lookup = dict(self.lookup)
+      f.close()
+      os.rename(self.filename + '.tmp', self.filename)
+      self.dirty = False
+
+  def Get(self, mac):
+    return self.lookup[mac]
+
+  def Invent(self, mac):
+    try:
+      vendor = oui.GetNiceName(mac)
+    except KeyError:
+      vendor = 'Unknown'
+    alias_set = set(self.lookup.values())
+    for i in range(1, 1000):
+      nice_mac = '%s%d' % (vendor, i)
+      if nice_mac not in alias_set:
+        break
+    else:
+      nice_mac = mac  # too many, give up
+    self.lookup[mac] = nice_mac
+    self.dirty = True
 
 
 class StationData(object):
@@ -112,10 +186,13 @@ def _GotPacket(opt, frame):
       sta.last_type = ap.last_type = opt.typestr
 
 
-def main(win):
-  global stations, pcount, badcount
+def _CursesMain(win):
+  global oui, stations, aliases, pcount, badcount
   pcount = badcount = 0
+  use_aliases = True
   show_mcast = False
+  oui = ieee_oui.OuiTable('oui.txt')
+  aliases = Aliases(os.path.expanduser('~/.ether_aliases'))
   stations = collections.defaultdict(lambda: collections.defaultdict(StationData))
   p = subprocess.Popen(['tcpdump', '-Ilni', 'en0', '-w', '-'],
                        stdout=subprocess.PIPE, stderr=open('/dev/null', 'w'))
@@ -142,7 +219,7 @@ def main(win):
     else:
       last_update = 0
       if ch.lower() == 'q':
-        return
+        break
       elif ch.lower() == 'm':
         show_mcast = not show_mcast
       elif ch.lower() == 'z':
@@ -150,6 +227,8 @@ def main(win):
           for station in ap.values():
             station.Zero()
         pcount = badcount = 0
+      elif ch.lower() == 'n':
+        use_aliases = not use_aliases
       elif ch in ('\n', '\r'):
         if cur_sta:
           cur_sta.is_expanded = not cur_sta.is_expanded
@@ -174,11 +253,12 @@ def main(win):
 
     now = time.time()
     if now - last_update > 0.1:
+      aliases.Load()
       rows, cols = win.getmaxyx()
       last_update = now
       win.scrollok(False)
       win.addstr(0, 0,
-                 '%-20.20s %4s %6s %8s %6s %8s %s' %
+                 '%-21.21s %4s %6s %8s %6s %8s %s' %
                  ('%d pkt, %d bad' % (pcount, badcount),
                   'RSSI', 'Up', '-----MCS', 'Down', '-----MCS', 'Type'),
                  0)
@@ -198,14 +278,21 @@ def main(win):
           if is_mcast and not show_mcast:
             continue
           if is_mcast:
-            typ = '  *'
+            typ = '   *'
           elif sta_mac:
             typ = '   '
           else:
-            typ = 'AP ' if stats.is_expanded else 'AP+'
-          row = ('%-3s%-17s %4s %6s %-8s %6s %-8s %s' %
+            typ = ' AP ' if stats.is_expanded else '+AP '
+          mac = sta_mac or ap_mac
+          nice_mac = mac
+          try:
+            nice_mac = aliases.Get(mac)
+          except KeyError:
+            aliases.Invent(mac)
+            nice_mac = aliases.Get(mac)
+          row = ('%-4s%-17s %4s %6s %-8s %6s %-8s %s' %
                  (typ,
-                  sta_mac or ap_mac,
+                  nice_mac if use_aliases else mac,
                   ('%d' % rssi_avg) if rssi_avg else '',
                   sum(up_packets) or '',
                   RateArt(up_packets, RATE_BIN_SHOW_MAX),
@@ -232,7 +319,8 @@ def main(win):
       win.move(cury, curx)
       win.refresh()
     try:
-      r, w, x = select.select([0] + [s for s,_ in streams], [], [], 0.1)
+      r, w, x = select.select([sys.stdin] + [s for s,_ in streams],
+                              [], [], 0.1)
     except select.error as e:
       pass
     else:
@@ -247,8 +335,14 @@ def main(win):
               streams.remove((stream, packetizer))
 
 
-if __name__ == '__main__':
+def main():
   try:
-    main(curses.initscr())
+    _CursesMain(curses.initscr())
   finally:
     curses.endwin()
+    if aliases:
+      aliases.Save()
+
+
+if __name__ == '__main__':
+  main()
