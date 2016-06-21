@@ -104,10 +104,12 @@ def main(win):
   stations = collections.defaultdict(lambda: collections.defaultdict(StationData))
   p = subprocess.Popen(['tcpdump', '-Ilni', 'en0', '-w', '-'],
                        stdout=subprocess.PIPE, stderr=open('/dev/null', 'w'))
-  stream = os.dup(p.stdout.fileno())
-  #stream = os.open('foo.pcap', os.O_RDONLY)
+  streams = []
+  streams.append((os.dup(p.stdout.fileno()),
+                  wifipacket.Packetizer(_GotPacket)))
+  #streams.append((os.open('foo.pcap', os.O_RDONLY),
+  #                wifipacket.Packetizer(_GotPacket)))
 
-  packetizer = wifipacket.Packetizer(_GotPacket)
   last_update = 0
   while 1:
     now = time.time()
@@ -141,14 +143,16 @@ def main(win):
           win.addstr('\n%s' % row[:cols-1])
       win.move(0, 0)
       win.refresh()
-    r, w, x = select.select([stream], [], [], 0.1)
-    if stream in r:
-      b = os.read(stream, 65536)
-      if b:
-        packetizer.Handle(b)
-      else:
-        # EOF
-        break
+    r, w, x = select.select([s for s,_ in streams], [], [], 0.1)
+    if r:
+      for stream, packetizer in streams[:]:
+        if stream in r:
+          b = os.read(stream, 65536)
+          if b:
+            packetizer.Handle(b)
+          else:
+            # EOF
+            streams.remove((stream, packetizer))
 
 
 if __name__ == '__main__':
