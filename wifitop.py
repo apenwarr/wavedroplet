@@ -42,7 +42,6 @@ def RateArt(bins):
 
 
 def main(win):
-  rows, cols = win.getmaxyx()
   stations = collections.defaultdict(lambda: collections.defaultdict(StationData))
   p = subprocess.Popen(['tcpdump', '-Ilni', 'en0', '-w', '-'],
                        stdout=subprocess.PIPE, stderr=open('/dev/null', 'w'))
@@ -56,6 +55,7 @@ def main(win):
     #if next_timeout:   # FIXME broken
     now = time.time()
     if now - last_update > 0.5:
+      rows, cols = win.getmaxyx()
       last_update = now
       win.move(0, 0)
       win.addstr('%-20s %5s %6s %-10s %6s %-10s %s\n' %

@@ -20,8 +20,11 @@ import bz2
 import csv
 import gzip
 import os
+import select
 import struct
 import sys
+
+import mybuf
 
 
 class Error(Exception):
@@ -217,14 +220,11 @@ def McsToRate(known, flags, index):
   return bw_index, MCS_TABLE[mcs][2][bw_index] * nss * gi_mult
 
 
-def Packetize(stream):
+def PacketizeBuf(buf):
   """Given a file containing pcap data, yield a series of packets."""
-  magicbytes = stream.read(4)
-
-  if magicbytes[:len(GZIP_MAGIC)] == GZIP_MAGIC:
-    stream.seek(-4, os.SEEK_CUR)
-    stream = gzip.GzipFile(mode='rb', fileobj=stream)
-    magicbytes = stream.read(4)
+  while buf.used < 4:
+    yield
+  magicbytes = buf.Get(4)
 
   # pcap global header
   if struct.unpack('<I', magicbytes) == (TCPDUMP_MAGIC,):
@@ -232,12 +232,14 @@ def Packetize(stream):
   elif struct.unpack('>I', magicbytes) == (TCPDUMP_MAGIC,):
     byteorder = '>'
   else:
-    raise FileError('unexpected tcpdump magic %r' % magicbytes)
+    raise FileError('unexpected tcpdump magic %r' % bytes(magicbytes))
+  while buf.used < 20:
+    yield
   (version_major, version_minor,
    unused_thiszone,
    unused_sigfigs,
    snaplen,
-   network) = struct.unpack(byteorder + 'HHiIII', stream.read(20))
+   network) = struct.unpack(byteorder + 'HHiIII', buf.Get(20))
   version = (version_major, version_minor)
   if version != TCPDUMP_VERSION:
     raise FileError('unexpected tcpdump version %r' % version)
@@ -251,9 +253,9 @@ def Packetize(stream):
     opt = Struct({})
 
     # pcap packet header
-    pcaphdr = stream.read(16)
-
-    if len(pcaphdr) < 16: break  # EOF
+    while buf.used < 16:
+      yield
+    pcaphdr = buf.Get(16)
 
     (ts_sec, ts_usec,
      incl_len, orig_len) = struct.unpack(byteorder + 'IIII', pcaphdr)
@@ -267,8 +269,9 @@ def Packetize(stream):
     opt.pcap_secs = ts_sec + (ts_usec / 1e6)
 
     # pcap packet data
-    radiotap = stream.read(incl_len)
-    if len(radiotap) < incl_len: break  # EOF
+    while buf.used < incl_len:
+      yield
+    radiotap = buf.Get(incl_len)
 
     opt.incl_len = incl_len
     opt.orig_len = orig_len
@@ -352,13 +355,15 @@ def Packetize(stream):
     ofs = 4
     for i, fieldname in enumerate(typefields):
       if fieldname == 'seq':
-        if len(frame) < ofs + 2: break
+        if len(frame) < ofs + 2:
+          break
         seq = struct.unpack('<H', frame[ofs:ofs + 2])[0]
         opt.seq = (seq & 0xfff0) >> 4
         opt.frag = (seq & 0x000f)
         ofs += 2
       else:  # ta, ra, xa
-        if len(frame) < ofs + 6: break
+        if len(frame) < ofs + 6:
+          break
         opt[fieldname] = MacAddr(frame[ofs:ofs + 6])
         ofs += 6
 
@@ -382,6 +387,31 @@ def Packetize(stream):
       last_ra = opt.get('ra')
 
     yield opt, frame
+
+
+def Packetize(stream, iter_timeout=None):
+  buf = mybuf.Buf()
+  magicbytes = stream.read(4)
+  if magicbytes[:len(GZIP_MAGIC)] == GZIP_MAGIC:
+    stream.seek(-4, os.SEEK_CUR)
+    stream = gzip.GzipFile(mode='rb', fileobj=stream)
+  else:
+    buf.Put(magicbytes)
+
+  it = PacketizeBuf(buf)
+  while 1:
+    while 1:
+      result = next(it)
+      if result is None:
+        # not enough data in buffer
+        break
+      yield result
+    if select.select([stream], [], [], iter_timeout):
+      b = stream.read(4096)
+      if not b:
+        # EOF
+        break
+      buf.Put(b)
 
 
 def Example(p):
