@@ -3,6 +3,7 @@ import collections
 import curses
 import errno
 import os
+import re
 import select
 import subprocess
 import sys
@@ -17,6 +18,8 @@ RATE_BIN_SHOW_MAX = 7
 
 pcount = None
 badcount = None
+unknowncount = None
+controlcount = None
 stations = None
 oui = None
 aliases = None
@@ -67,7 +70,8 @@ class Aliases(object):
       self.Load()  # first merge in other people's changes
       f = open(self.filename + '.tmp', 'w')
       for macaddr, alias in sorted(self.lookup.iteritems()):
-        f.write('%s %s\n' % (macaddr, alias))
+        if macaddr != alias:
+          f.write('%s %s\n' % (macaddr, alias))
       self.file_time = os.fstat(f.fileno()).st_mtime
       self.orig_lookup = dict(self.lookup)
       f.close()
@@ -75,7 +79,10 @@ class Aliases(object):
       self.dirty = False
 
   def Get(self, mac):
-    return self.lookup[mac]
+    n = self.lookup[mac]
+    if n.startswith('?'):
+      return n[1:]  # ?-indicator is for "guessed" names; don't display
+    return n
 
   def Invent(self, mac):
     try:
@@ -84,13 +91,21 @@ class Aliases(object):
       vendor = 'Unknown'
     alias_set = set(self.lookup.values())
     for i in range(1, 1000):
-      nice_mac = '%s%d' % (vendor, i)
+      nice_mac = '?%s%d' % (vendor, i)
       if nice_mac not in alias_set:
         break
     else:
       nice_mac = mac  # too many, give up
     self.lookup[mac] = nice_mac
     self.dirty = True
+
+  def BetterGuess(self, mac, name):
+    name = '?' + name
+    if (mac not in self.orig_lookup or
+        self.lookup.get(mac, '').startswith('?')):
+      if self.lookup.get(mac) != name:
+        self.lookup[mac] = name
+        self.dirty = True
 
 
 class StationData(object):
@@ -145,25 +160,30 @@ def _IsMcast(sta_mac):
 
 
 def _GotPacket(opt, frame):
-  global pcount, badcount
+  global pcount, badcount, unknowncount, controlcount
   pcount += 1
   if opt.bad:
     badcount += 1
-  if opt.typestr[0] != '1':
-    if opt.dsmode == 2:
+  if opt.typestr[0] == '1':
+    # control traffic is uninteresting for now
+    controlcount += 1
+  else:
+    if opt.dsmode == 2 or (opt.dsmode == 0 and opt.type == 0x08):
       down = True
       ap_mac, sta_mac = opt.get('ta', None), opt.get('ra', None)
     elif opt.dsmode == 1:
       down = False
       sta_mac, ap_mac = opt.get('ta', None), opt.get('ra', None)
     else:
-      # dsmode 0 might be either AP or STA; ignore for now.
+      # dsmode 0 is unclear whether AP or STA; ignore for now.
       return
-    if opt.bad and not ap_mac in stations:
+    if opt.bad and ap_mac not in stations:
+      unknowncount += 1
       return
     ap_arr = stations[ap_mac]
     ap = ap_arr[None]
     if opt.bad and sta_mac not in ap_arr:
+      unknowncount += 1
       return
     sta = ap_arr[sta_mac]
     if opt.typestr[0] == '2':  # only care about data rates
@@ -181,14 +201,18 @@ def _GotPacket(opt, frame):
         sta.rssi[opt.dbm_antsignal] += 1
     if down and opt.typestr == '08 Beacon':
       ap.is_ap = True
+      ssid = opt.get('ssid')
+      if ssid:
+        ssid = re.sub(r'[^\w]', '.', ssid)
+        aliases.BetterGuess(ap_mac, ssid)
     if opt.typestr not in ('08 Beacon', '24 Null'):
       sta.last_updated = ap.last_updated = time.time()
       sta.last_type = ap.last_type = opt.typestr
 
 
 def _CursesMain(win):
-  global oui, stations, aliases, pcount, badcount
-  pcount = badcount = 0
+  global oui, stations, aliases, pcount, badcount, unknowncount, controlcount
+  pcount = badcount = unknowncount = controlcount = 0
   use_aliases = True
   show_mcast = False
   oui = ieee_oui.OuiTable('oui.txt')
@@ -259,7 +283,9 @@ def _CursesMain(win):
       win.scrollok(False)
       win.addstr(0, 0,
                  '%-21.21s %4s %6s %8s %6s %8s %s' %
-                 ('%d pkt, %d bad' % (pcount, badcount),
+                 ('%dkp %dkb %dku %dkc' %
+                  (pcount/1000, badcount/1000,
+                   unknowncount/1000, controlcount/1000),
                   'RSSI', 'Up', '-----MCS', 'Down', '-----MCS', 'Type'),
                  0)
       n = 0
@@ -290,7 +316,7 @@ def _CursesMain(win):
           except KeyError:
             aliases.Invent(mac)
             nice_mac = aliases.Get(mac)
-          row = ('%-4s%-17s %4s %6s %-8s %6s %-8s %s' %
+          row = ('%-4s%-17.17s %4s %6s %-8s %6s %-8s %s' %
                  (typ,
                   nice_mac if use_aliases else mac,
                   ('%d' % rssi_avg) if rssi_avg else '',

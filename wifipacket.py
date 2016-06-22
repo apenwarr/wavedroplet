@@ -220,6 +220,21 @@ def McsToRate(known, flags, index):
   return bw_index, MCS_TABLE[mcs][2][bw_index] * nss * gi_mult
 
 
+def _ParseTLV(frame, start, end):
+  d = {}
+  ofs = start
+  while ofs + 1 < end:
+    tag = frame[ofs]
+    length = ord(frame[ofs+1])
+    if end - ofs - 2 < length:
+      # not enough bytes left
+      break
+    value = frame[ofs+2:ofs+2+length]
+    ofs += 2 + length
+    d[ord(tag)] = value
+  return d
+
+
 def PacketizeBuf(buf):
   """Given a file containing pcap data, yield a series of packets."""
   while buf.used < 4:
@@ -272,6 +287,7 @@ def PacketizeBuf(buf):
     while buf.used < incl_len:
       yield
     radiotap = buf.Get(incl_len)
+    assert len(radiotap) == incl_len
 
     opt.incl_len = incl_len
     opt.orig_len = orig_len
@@ -366,6 +382,14 @@ def PacketizeBuf(buf):
           break
         opt[fieldname] = MacAddr(frame[ofs:ofs + 6])
         ofs += 6
+
+    # Parse extra tags out of some management frames, when possible.
+    if opt.type == 0x08:  # Beacon
+      ofs += 12  # fixed parameters
+      opt.tags = _ParseTLV(frame, ofs, len(frame) - 4)
+      opt.ssid = opt.tags.get(0)
+      if opt.ssid == '\x00':  # hidden ssid
+        del opt.ssid
 
     # ACK and CTS packets omit TA field for efficiency, so we have to fill
     # it in from the previous packet's RA field.  We can check that the
@@ -492,8 +516,9 @@ def Example(p):
         if opt.flags & Flags.BAD_FCS:
           continue
       print(i + 1,
-            src, opt.dsmode, opt.typestr, ts,
-            opt.rate, opt.get('mcs'), opt.get('spatialstreams'),
+            src, 'ta=%s' % opt.get('ta'), 'ra=%s' % opt.get('ra'),
+            opt.dsmode, opt.typestr, ts,
+            opt.rate, 'mcs=%r' % opt.get('mcs'), opt.get('spatialstreams'),
             mac_usecs, opt.orig_len, seq, opt.get('flags'))
       sys.stdout.flush()
 
