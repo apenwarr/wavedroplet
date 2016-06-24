@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python
 # Copyright 2014 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -221,6 +221,7 @@ def McsToRate(known, flags, index):
 
 
 def _ParseTLV(frame, start, end):
+  """Prase tag-length-value fields from frame data."""
   d = {}
   ofs = start
   while ofs + 1 < end:
@@ -414,6 +415,7 @@ def PacketizeBuf(buf):
 
 
 def Packetize(stream, iter_timeout=None):
+  """Given a python data stream, yield a series of parsed packets."""
   buf = mybuf.Buf()
   magicbytes = stream.read(4)
   if magicbytes[:len(GZIP_MAGIC)] == GZIP_MAGIC:

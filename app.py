@@ -21,8 +21,8 @@ import sys
 import time
 import traceback
 import urllib
-import webapp2
 import tornado.template
+import webapp2
 import wifipacket
 from google.appengine.api import memcache
 from google.appengine.api import users
@@ -32,10 +32,14 @@ from google.appengine.ext.webapp import blobstore_handlers
 
 BROADCAST = 'ff:ff:ff:ff:ff:ff'
 DEFAULT_FIELDS = ['seq', 'rate']
-AVAIL_FIELDS = ['seq', 'mcs', 'spatialstreams', 'bw', 'rate', 'retry', 'bad', 'retry_bad',
-                'type', 'typestr', 'dsmode', 'dbm_antsignal', 'dbm_antnoise', 'streamId']
-ALL_FIELDS = ['pcap_secs', 'mac_usecs', 'ta', 'ra', 'antenna',
-              'duration', 'orig_len', 'powerman'] + AVAIL_FIELDS
+AVAIL_FIELDS = [
+    'seq', 'mcs', 'spatialstreams', 'bw', 'rate',
+    'retry', 'bad', 'retry_bad',
+    'type', 'typestr', 'dsmode', 'dbm_antsignal', 'dbm_antnoise',
+    'streamId']
+ALL_FIELDS = [
+    'pcap_secs', 'mac_usecs', 'ta', 'ra', 'antenna',
+    'duration', 'orig_len', 'powerman'] + AVAIL_FIELDS
 
 IS_DEBUG = False
 SAMPLE_SIZE = 2
@@ -249,8 +253,9 @@ class SaveHandler(_BaseHandler):
 
     self.redirect('/d3viz.html#key=%s&to_plot=%s&ack=%s'
                   % (_Esc(str(blob_info.key())),
-                  _Esc(','.join(pcapdata.show_fields)),
-                  _Esc(ack)))
+                     _Esc(','.join(pcapdata.show_fields)),
+                     _Esc(ack)))
+
 
 class _CacheMissing(Exception):
   pass
@@ -268,7 +273,6 @@ def _ReadCache(start_times, start_time, end_time, get_func):
         raise _CacheMissing(i)
       out.extend(v)
   return out
-
 
 
 def _MaybeCache(blob_info, pcapdata, start_time, end_time):
@@ -317,9 +321,10 @@ def _MaybeCache(blob_info, pcapdata, start_time, end_time):
     print 'saving %d with %d elements (%d bytes)' % (i, len(g), len(gstr))
     memcache.set(key='%s_%d' % (prefix, i), value=gstr, namespace='jsdata')
 
-  # TODO: don't need streams or start_times, so don't precalculate these above
+  # TODO(apenwarr): don't need streams or start_times, so don't precalculate
+  #   these above.
 
-  #jscache = dict(js_streams=pairs_dict,
+  # jscache = dict(js_streams=pairs_dict,
   #               start_times=start_times)
 
   jscache = dict()
@@ -346,8 +351,9 @@ class JsonHandler(_BaseHandler):
     jscache = _MaybeCache(blob_info=blob_info, pcapdata=pcapdata,
                           start_time=None, end_time=None)
     jscache['filename'] = str(blob_info.filename)
-    jscache["aliases"] = pcapdata.aliases
+    jscache['aliases'] = pcapdata.aliases
     self.response.out.write(json.dumps(jscache))
+
 
 def Handle500(unused_req, resp, exc):
   resp.clear()

@@ -12,10 +12,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""A curses-based tool that shows current wifi activity."""
 
 import collections
 import curses
-import errno
 import os
 import re
 import select
@@ -40,6 +40,8 @@ aliases = None
 
 
 class Aliases(object):
+  """A registry mapping MAC addresses to friendly names."""
+
   def __init__(self, filename):
     self.filename = filename
     self.file_time = 0
@@ -49,6 +51,7 @@ class Aliases(object):
     self.Load()
 
   def Load(self):
+    """Update the alias list from any changes in the backing file."""
     try:
       mtime = os.stat(self.filename).st_mtime
     except OSError:
@@ -80,6 +83,7 @@ class Aliases(object):
     self.file_time = mtime
 
   def Save(self):
+    """If any changes to aliases, rewrite the backing file."""
     if self.dirty:
       self.Load()  # first merge in other people's changes
       f = open(self.filename + '.tmp', 'w')
@@ -99,6 +103,7 @@ class Aliases(object):
     return n
 
   def Invent(self, mac):
+    """Given a MAC address, try to populate the alias for it if missing."""
     try:
       vendor = oui.GetNiceName(mac)
     except KeyError:
@@ -114,6 +119,7 @@ class Aliases(object):
     self.dirty = True
 
   def BetterGuess(self, mac, name):
+    """If you have a better alias for a given MAC, substitute it."""
     name = '?' + name
     if (mac not in self.orig_lookup or
         self.lookup.get(mac, '').startswith('?')):
@@ -123,6 +129,8 @@ class Aliases(object):
 
 
 class StationData(object):
+  """An object tracking the statistical data for a given wifi AP or STA."""
+
   def __init__(self):
     self.packets_tx = [0] * (RATE_BIN_MAX + 1)
     self.packets_rx = [0] * (RATE_BIN_MAX + 1)
@@ -133,13 +141,14 @@ class StationData(object):
     self.is_expanded = False
 
   def Zero(self):
-    self.packets_tx = [0 for i in self.packets_tx]
-    self.packets_rx = [0 for i in self.packets_rx]
+    self.packets_tx = [0 for _ in self.packets_tx]
+    self.packets_rx = [0 for _ in self.packets_rx]
     self.last_updated = 0
     self.rssi.clear()
 
 
 def RateArt(bins, maxbin):
+  """From a set of bins, return a str representing their relative weights."""
   # To keep the column length smaller, we treat all bins >= maxbin as
   # one big "meh, fast enough" bin.  But we still report the exact bin was
   # the largest in that group.
@@ -173,7 +182,7 @@ def _IsMcast(sta_mac):
   return sta_mac and int(sta_mac[0:2], 16) & 1
 
 
-def _GotPacket(opt, frame):
+def _GotPacket(opt, unused_frame):
   global pcount, badcount, unknowncount, controlcount
   pcount += 1
   if opt.bad:
@@ -224,20 +233,34 @@ def _GotPacket(opt, frame):
       sta.last_type = ap.last_type = opt.typestr
 
 
+def _APSortKey((unused_mac, stationlist)):
+  ap = stationlist[None]
+  return -sum(ap.packets_tx) - sum(ap.packets_rx)
+
+
+def _STASortKey((mac, sta)):
+  return (not not mac) - sum(sta.packets_tx)-sum(sta.packets_rx)
+
+
 def _CursesMain(win):
+  """This function is called inside a curses initscr() activity."""
   global oui, stations, aliases, pcount, badcount, unknowncount, controlcount
   pcount = badcount = unknowncount = controlcount = 0
   use_aliases = True
   show_mcast = False
   oui = ieee_oui.OuiTable('oui.txt')
   aliases = Aliases(os.path.expanduser('~/.ether_aliases'))
-  stations = collections.defaultdict(lambda: collections.defaultdict(StationData))
+  stations = collections.defaultdict(
+      lambda: collections.defaultdict(StationData))
   p = subprocess.Popen(['tcpdump', '-Ilni', 'en0', '-w', '-'],
                        stdout=subprocess.PIPE, stderr=open('/dev/null', 'w'))
   streams = []
   streams.append((os.dup(p.stdout.fileno()),
                   wifipacket.Packetizer(_GotPacket)))
-  #streams.append((os.open('foo.pcap', os.O_RDONLY),
+  # TODO(apenwarr): use multi-stream support for something.
+  #   The idea is we can listen to multiple tcpdump instances at once (eg.
+  #   if there are multiple wifi interfaces).
+  # streams.append((os.open('foo.pcap', os.O_RDONLY),
   #                wifipacket.Packetizer(_GotPacket)))
 
   last_update = 0
@@ -303,12 +326,14 @@ def _CursesMain(win):
                   'RSSI', 'Up', '-----MCS', 'Down', '-----MCS', 'Type'),
                  0)
       n = 0
-      for ap_mac, ap_arr in sorted(stations.iteritems(),
-                                   key = lambda (mac,aa): -sum(aa[None].packets_tx)-sum(aa[None].packets_rx)):
+      for ap_mac, ap_arr in sorted(stations.iteritems(), key=_APSortKey):
         ap = ap_arr[None]
-        for sta_mac, stats in sorted(ap_arr.iteritems(),
-                                     key=lambda (mac,st): (not not mac)-sum(st.packets_tx)-sum(st.packets_rx)):
-          rssi_avg = sum(rssi*count for (rssi, count) in stats.rssi.iteritems()) / (1+sum(count for (rssi, count) in stats.rssi.iteritems()))
+        for sta_mac, stats in sorted(ap_arr.iteritems(), key=_STASortKey):
+          rssi_sum = sum(rssi * count
+                         for (rssi, count) in stats.rssi.iteritems())
+          rssi_count = 1 + sum(count
+                               for (rssi, count) in stats.rssi.iteritems())
+          rssi_avg = rssi_sum / rssi_count
           is_ap = 0 if sta_mac else 1
           if not is_ap and not ap.is_expanded:
             continue
@@ -345,6 +370,7 @@ def _CursesMain(win):
                        curses.A_BOLD
                        if time.time() - stats.last_updated < 2 else 0)
           except curses.error:
+            # pylint: disable=line-too-long
             # See http://stackoverflow.com/questions/36387625/curses-calling-addch-on-the-bottom-right-corner
             pass
           if cury == n + 1:
@@ -359,9 +385,9 @@ def _CursesMain(win):
       win.move(cury, curx)
       win.refresh()
     try:
-      r, w, x = select.select([sys.stdin] + [s for s,_ in streams],
+      r, _, _ = select.select([sys.stdin] + [s for s, _ in streams],
                               [], [], 0.1)
-    except select.error as e:
+    except select.error:
       pass
     else:
       if r:

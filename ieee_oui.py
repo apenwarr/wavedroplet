@@ -11,11 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""Support functions for handling the IEEE OUI database."""
 
 import re
 
 
 class OuiTable(object):
+  """A table mapping ethernet MAC OUI prefixes to vendor names."""
+
   def __init__(self, filename):
     self.lookup = {}
     for line in open(filename):
@@ -32,7 +35,6 @@ class OuiTable(object):
     name = self.GetName(macaddr)
     firstword = name.split()[0]
     return re.sub(r'[^A-Za-z]', '', firstword)[:8]
-    
 
 
 if __name__ == '__main__':
