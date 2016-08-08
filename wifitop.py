@@ -12,6 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 """A curses-based tool that shows current wifi activity."""
 
 import collections
@@ -23,7 +24,15 @@ import subprocess
 import sys
 import time
 import ieee_oui
+import options
 import wifipacket
+
+optspec = """
+wifitop [options]
+--
+i,ifc=       Network interface to use [en0]
+tcpdump=     tcpdump command line [tcpdump -w - -Ilni {ifc}]
+"""
 
 
 RATE_BIN_MAX = 9
@@ -242,7 +251,7 @@ def _STASortKey((mac, sta)):
   return (not not mac) - sum(sta.packets_tx)-sum(sta.packets_rx)
 
 
-def _CursesMain(win):
+def _CursesMain(win, ifc, tcpdump):
   """This function is called inside a curses initscr() activity."""
   global oui, stations, aliases, pcount, badcount, unknowncount, controlcount
   pcount = badcount = unknowncount = controlcount = 0
@@ -252,10 +261,13 @@ def _CursesMain(win):
   aliases = Aliases(os.path.expanduser('~/.ether_aliases'))
   stations = collections.defaultdict(
       lambda: collections.defaultdict(StationData))
-  p = subprocess.Popen(['tcpdump', '-Ilni', 'en0', '-w', '-'],
-                       stdout=subprocess.PIPE, stderr=open('/dev/null', 'w'))
+  tcpdump_argv = [i.format(ifc=ifc) for i in tcpdump.split()]
+  p = subprocess.Popen(tcpdump_argv,
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
   streams = []
+  stderr_log = []
   streams.append((os.dup(p.stdout.fileno()),
+                  os.dup(p.stderr.fileno()),
                   wifipacket.Packetizer(_GotPacket)))
   # TODO(apenwarr): use multi-stream support for something.
   #   The idea is we can listen to multiple tcpdump instances at once (eg.
@@ -384,30 +396,44 @@ def _CursesMain(win):
       curx = min(curx, cols - 1)
       win.move(cury, curx)
       win.refresh()
+    if not streams:
+      break
     try:
-      r, _, _ = select.select([sys.stdin] + [s for s, _ in streams],
+      r, _, _ = select.select([sys.stdin] +
+                              [so for so, _, _ in streams] +
+                              [se for _, se, _ in streams],
                               [], [], 0.1)
     except select.error:
       pass
     else:
       if r:
-        for stream, packetizer in streams[:]:
-          if stream in r:
-            b = os.read(stream, 65536)
+        for streamout, streamerr, packetizer in streams[:]:
+          if streamout in r:
+            b = os.read(streamout, 65536)
             if b:
               packetizer.Handle(b)
-            else:
+          if streamerr in r:
+            b = os.read(streamerr, 65536)
+            stderr_log.append(b)
+            if not b:
               # EOF
-              streams.remove((stream, packetizer))
+              streams.remove((streamout, streamerr, packetizer))
+  return stderr_log
 
 
 def main():
+  o = options.Options(optspec)
+  opt, unused_flags, extra = o.parse(sys.argv[1:])
+  if extra:
+    o.fatal('no non-flag arguments expected')
   try:
-    _CursesMain(curses.initscr())
+    stderr_log = _CursesMain(curses.initscr(),
+                             ifc=opt.ifc, tcpdump=opt.tcpdump)
   finally:
     curses.endwin()
-    if aliases:
-      aliases.Save()
+  sys.stderr.write(''.join(stderr_log))
+  if aliases:
+    aliases.Save()
 
 
 if __name__ == '__main__':
