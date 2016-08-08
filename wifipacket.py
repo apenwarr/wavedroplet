@@ -62,6 +62,17 @@ TCPDUMP_VERSION = (2, 4)
 LINKTYPE_IEEE802_11_RADIOTAP = 127
 SHORT_GI_MULT = 10 / 9.
 
+# Basic calculation for Interframe times.
+# https://en.wikipedia.org/wiki/DCF_Interframe_Space
+#
+# TODO(apenwarr): do this more precisely.
+#   This is cheating a bit: the interframe spaces somewhat depend on
+#   wifi standard in use and which band we're on.  We also don't try to
+#   differentiate between different frame types or priority levels.
+SIFS_USEC = 16
+SLOT_TIME_USEC = 9
+IFS_USEC = SIFS_USEC + (2 * SLOT_TIME_USEC)
+
 
 class Flags(object):
   """Flags in the radiotap header."""
@@ -264,6 +275,7 @@ def PacketizeBuf(buf):
 
   last_ta = None
   last_ra = None
+  last_mac_usecs = 0
 
   while 1:
     opt = Struct({})
@@ -309,7 +321,6 @@ def PacketizeBuf(buf):
         v = struct.unpack(structformat, optbytes[ofs:ofs + sz])
         if name == 'mac_usecs':
           opt.mac_usecs = v[0]
-          # opt.mac_secs = v[0] / 1e6
         elif name == 'channel':
           opt.freq = v[0]
           opt.channel_flags = v[1]
@@ -344,6 +355,17 @@ def PacketizeBuf(buf):
         else:
           opt[name] = v if len(v) > 1 else v[0]
         ofs += sz
+
+    if 'mac_usecs' in opt and 'rate' in opt:
+      # TODO(apenwarr): use something smarter than orig_len for byte count.
+      #   This includes radiotap header bytes, which is wrong, but probably
+      #   leaves out some other stuff, so it sort of averages out to be right,
+      #   which isn't really what we want :)
+      opt.airtime_usec = opt.orig_len * 8 / opt.rate
+      if opt.mac_usecs != last_mac_usecs:
+        # Only count the inter-frame time for the first packet in an aggregate
+        # (assuming all subframes of an aggregate have the same MAC timestamp)
+        opt.airtime_usec += IFS_USEC
 
     try:
       (fctl, duration) = struct.unpack('<HH', frame[0:4])
@@ -410,6 +432,8 @@ def PacketizeBuf(buf):
     else:
       last_ta = opt.get('ta')
       last_ra = opt.get('ra')
+    if 'mac_usecs' in opt:
+      last_mac_usecs = opt.mac_usecs
 
     yield opt, frame
 
