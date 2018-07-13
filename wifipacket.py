@@ -310,8 +310,19 @@ def PacketizeBuf(buf):
      it_len, it_present) = struct.unpack('<BBHI', radiotap[:8])
     if it_version != 0:
       raise PacketError('unknown radiotap version %d' % it_version)
+    # handle multiple it_present
+    it_presents = []
+    it_presents.append(it_present)
+    offset = 8
+    while it_present & (1 << 31):
+      it_present = struct.unpack('<I', radiotap[offset:offset+4])[0]
+      it_presents.append(it_present)
+      offset += 4
+    # choose first flags
+    it_present = it_presents[0]
+
     frame = radiotap[it_len:]
-    optbytes = radiotap[8:it_len]
+    optbytes = radiotap[offset:it_len]
 
     ofs = 0
     for i, (name, structformat) in enumerate(RADIOTAP_FIELDS):
